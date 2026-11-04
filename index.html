@@ -1206,7 +1206,7 @@ function render() {
   document.querySelectorAll('.g-move button').forEach(b => b.disabled = S.busy || over || !canAct());
   ['endBtn', 'newBtn'].forEach(id => { const b = $(id); if (b) b.disabled = !!S.busy && !iAmActor(); });
   const pre = over ? '' : ({ '16': 'マス16：先にPMF判定のサイコロを振る（押すと目を聞かれる）', '29': 'マス29：進む道を選んでから移動', '49': 'マス49：管理体制で道が決まる' })[p.pos] || '';
-  $('moveNote').textContent = pre;
+  $('moveNote').textContent = S.phase === 'setup' ? `準備中：${S.players[S.cur].name}が自分のPCで職業と事業を選んでいる` : (online() && !mySeat(S.cur) && !over ? `${S.players[S.cur].name}の番（担当のPCで操作）` : pre);
   $('players').innerHTML = S.players.map((q, i) => {
     const posLabel = q.done ? `ゴール（${q.market || ''}）` : (q.pos === '0' ? 'START' : `マス${q.pos}`);
     const chips = (q.type ? `<span class="g-chip type">${q.type}</span>` : '') + q.sups.map(s => `<span class="g-chip ${isKeep(s) ? '' : 'spot'}" title="${kindOf(s)}">${s}</span>`).join('') + (q.rest ? '<span class="g-chip rest">1回休み</span>' : '');
@@ -1735,56 +1735,95 @@ function showResults() {
 }
 
 /* ===================== 開始 ===================== */
+const SETUP = { tab: 'local', n: 4, names: ['プレイヤー1','プレイヤー2','プレイヤー3','プレイヤー4','プレイヤー5','プレイヤー6'], my: [''], code: '', pc: '', msg: '' };
 function setup() {
-  let n = 4, tab = 'local', msg = '';
-  const names = ['プレイヤー1','プレイヤー2','プレイヤー3','プレイヤー4','プレイヤー5','プレイヤー6'];
-  let joinCode = '', pcName = '';
-  const m = $('modal');
-  const keep = () => { for (let i = 0; i < 6; i++) { const el = $('pname' + i); if (el) names[i] = el.value; } const c = $('joinCode'); if (c) joinCode = c.value; const pn = $('pcName'); if (pn) pcName = pn.value; };
+  const m = $('modal'); const U = SETUP;
+  const keep = () => {
+    for (let i = 0; i < 6; i++) { const el = $('pname' + i); if (el) U.names[i] = el.value; }
+    U.my = U.my.map((v, i) => { const el = $('myname' + i); return el ? el.value : v; });
+    const c = $('joinCode'); if (c) U.code = c.value; const pc = $('pcName'); if (pc) U.pc = pc.value;
+  };
+  const myForm = (label) => `<p style="font-size:13px;margin:8px 0 4px">${label}</p><div class="g-opts" style="margin-top:0">${U.my.map((v, i) => `<label class="g-row" style="grid-template-columns:1fr auto"><input id="myname${i}" value="${esc(v)}" maxlength="12" placeholder="${i === 0 ? '名前（例：佐藤）' : 'このPCで一緒に遊ぶ人の名前'}" aria-label="プレイヤーの名前${i + 1}">${i ? `<button type="button" class="g-btn ghost" data-delname="${i}" style="padding:8px 10px">削除</button>` : '<span></span>'}</label>`).join('')}</div>
+    ${U.my.length < 3 ? '<button type="button" class="g-link" id="addName" style="margin-top:6px">＋このPCで一緒に遊ぶ人を追加（1台を2人以上で使うとき）</button>' : ''}`;
   const draw = () => {
     m.dataset.kind = 'setup';
     const tabs = [['local', 'このPCだけで遊ぶ'], ['host', 'オンライン：部屋を作る'], ['guest', 'オンライン：部屋に参加']]
-      .map(([k, l]) => `<button type="button" class="g-btn ${tab === k ? '' : 'ghost'}" data-tab="${k}">${l}</button>`).join('');
-    const playersForm = `<div class="g-count" role="group" aria-label="人数">${[2,3,4,5,6].map(k => `<button type="button" class="g-btn ghost" aria-pressed="${k === n}" data-n="${k}">${k}人</button>`).join('')}</div>
-      <div class="g-opts" style="margin-top:0">${Array.from({ length: n }, (_, i) => `<label class="g-row"><span class="g-dot" style="background:${COLORS[i]}"></span><input id="pname${i}" value="${esc(names[i])}" maxlength="12" aria-label="プレイヤー${i + 1}の名前"></label>`).join('')}</div>`;
-    const body = tab === 'local' ? `<p style="font-size:13px">1台のPCを囲んで遊ぶ（プロジェクターに映して全員で見るとき）。</p>${playersForm}<div class="g-opts"><button type="button" class="g-btn" id="startBtn">ゲームを始める</button></div>`
-      : tab === 'host' ? `<p style="font-size:13px">このPCが部屋を作り、ほかのPCは4文字の部屋コードで参加する。プレイヤーの名前はここで全員ぶん決める（参加したPCが、自分の担当プレイヤーを選ぶ）。ゲーム中はこのPCのページを閉じないこと。</p>${playersForm}<div class="g-opts"><button type="button" class="g-btn" id="hostBtn">部屋を作ってゲームを始める</button></div>`
-      : `<p style="font-size:13px">ホストのPCに表示されている4文字の部屋コードを入れる。</p>
-        <label class="g-row" style="grid-template-columns:7em 1fr"><span>部屋コード</span><input id="joinCode" value="${esc(joinCode)}" maxlength="4" style="text-transform:uppercase;letter-spacing:.3em;font-weight:900" autocomplete="off"></label>
-        <label class="g-row" style="grid-template-columns:7em 1fr;margin-top:6px"><span>このPCの名前</span><input id="pcName" value="${esc(pcName)}" maxlength="12" placeholder="例：2班"></label>
-        <div class="g-opts"><button type="button" class="g-btn" id="joinBtn">部屋に参加する</button></div>`;
+      .map(([k, l]) => `<button type="button" class="g-btn ${U.tab === k ? '' : 'ghost'}" data-tab="${k}">${l}</button>`).join('');
+    const prev = savedHostRoom();
+    let body;
+    if (U.tab === 'local') body = `<p style="font-size:13px">1台のPCを囲んで遊ぶ（プロジェクターに映して全員で見るとき）。</p>
+      <div class="g-count" role="group" aria-label="人数">${[2,3,4,5,6].map(k => `<button type="button" class="g-btn ghost" aria-pressed="${k === U.n}" data-n="${k}">${k}人</button>`).join('')}</div>
+      <div class="g-opts" style="margin-top:0">${Array.from({ length: U.n }, (_, i) => `<label class="g-row"><span class="g-dot" style="background:${COLORS[i]}"></span><input id="pname${i}" value="${esc(U.names[i])}" maxlength="12" aria-label="プレイヤー${i + 1}の名前"></label>`).join('')}</div>
+      <div class="g-opts"><button type="button" class="g-btn" id="startBtn">ゲームを始める</button></div>`;
+    else if (U.tab === 'host') body = `<p style="font-size:13px">このPCで部屋を作り、ほかのPCに4文字の部屋コードを伝える。全員が入ったら、このPCで「ゲーム開始」を押す。ゲーム中はこのPCのページを閉じないこと。</p>
+      ${myForm('このPCで遊ぶ人の名前')}
+      <div class="g-opts"><button type="button" class="g-btn" id="hostBtn">部屋を作る</button>${prev ? `<button type="button" class="g-btn ghost" id="resumeBtn">前回の部屋 ${prev.code} を再開する（${esc(prev.state.players.map(p => p.name).join('・'))}）</button>` : ''}</div>`;
+    else body = `<p style="font-size:13px">ホストのPCに出ている4文字の部屋コードを入れて参加する。</p>
+      <label class="g-row" style="grid-template-columns:7em 1fr"><span>部屋コード</span><input id="joinCode" value="${esc(U.code)}" maxlength="4" style="text-transform:uppercase;letter-spacing:.3em;font-weight:900" autocomplete="off"></label>
+      <label class="g-row" style="grid-template-columns:7em 1fr;margin-top:6px"><span>このPCの名前</span><input id="pcName" value="${esc(U.pc)}" maxlength="12" placeholder="例：2班"></label>
+      ${myForm('このPCで遊ぶ人の名前（観戦だけなら空欄のまま）')}
+      <div class="g-opts"><button type="button" class="g-btn" id="joinBtn">部屋に参加する</button></div>`;
     m.innerHTML = `<div class="g-setup"><div class="kicker">IPO双六 プレイ版</div><h2>めざせ上場！</h2>
       <p>全員${yen(RULES.START_CASH)}を持ってスタート。専門家を雇うか、事業に投資するか、お金の使い方を考えながら時価総額100億円（プライム市場）をめざす。サイコロとカードは実物を使い、出た目や引いたカードをここに入力する。</p>
-      <div class="g-tabs">${tabs}</div>${body}${msg ? `<p class="g-na" style="margin-top:10px">${esc(msg)}</p>` : ''}</div>`;
-    m.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { keep(); tab = b.dataset.tab; msg = ''; draw(); }));
-    m.querySelectorAll('[data-n]').forEach(b => b.addEventListener('click', () => { keep(); n = +b.dataset.n; draw(); }));
-    const start = async (room) => {
-      const list = Array.from({ length: n }, (_, i) => (names[i] || '').trim() || `プレイヤー${i + 1}`);
+      <div class="g-tabs">${tabs}</div>${body}${U.msg ? `<p class="g-na" style="margin-top:10px">${esc(U.msg)}</p>` : ''}</div>`;
+    m.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { keep(); U.tab = b.dataset.tab; U.msg = ''; draw(); }));
+    m.querySelectorAll('[data-n]').forEach(b => b.addEventListener('click', () => { keep(); U.n = +b.dataset.n; draw(); }));
+    m.querySelectorAll('[data-delname]').forEach(b => b.addEventListener('click', () => { keep(); U.my.splice(+b.dataset.delname, 1); draw(); }));
+    const an = $('addName'); if (an) an.addEventListener('click', () => { keep(); U.my.push(''); draw(); });
+    const myNames = () => U.my.map(v => (v || '').trim()).filter(Boolean);
+    const sb = $('startBtn'); if (sb) sb.addEventListener('click', async () => {
+      keep(); leaveGame();
+      const list = Array.from({ length: U.n }, (_, i) => (U.names[i] || '').trim() || `プレイヤー${i + 1}`);
       $('overlay').hidden = true;
-      S = newState(list); S.room = room || ''; S.title = room ? '部屋' + room : '';
-      S.busy = true; S.actor = CLIENT; S.actorName = '最初の準備'; render(); pushSoon(true);
+      S = newState(list); S.phase = 'play';
       await initialPicks();
-      S.busy = false; S.actor = null; S.view = null;
       log('ゲーム開始！ 左上のSTARTから時計回りに進み、中央のGOAL（プライム市場）をめざす。');
       render(); save();
-    };
-    const sb = $('startBtn'); if (sb) sb.addEventListener('click', () => { keep(); leaveGame(); start(''); });
+    });
     const hb = $('hostBtn'); if (hb) hb.addEventListener('click', () => {
-      keep(); hb.disabled = true; hb.textContent = '部屋を作っている…';
-      createRoom(code => start(code), err => { msg = err; draw(); });
+      keep(); const names = myNames();
+      if (!names.length) { U.msg = 'このPCで遊ぶ人の名前を入れてください'; draw(); return; }
+      hb.disabled = true; hb.textContent = '部屋を作っている…';
+      S = null;
+      createRoom(names, () => drawLobby(), err => { U.msg = err; draw(); });
+    });
+    const rb = $('resumeBtn'); if (rb) rb.addEventListener('click', () => {
+      rb.disabled = true; rb.textContent = '再開している…';
+      createRoom(prev.state.players.filter(p => p.owner === prev.client).map(p => p.name), () => { $('overlay').hidden = true; render(); pushNow(); }, err => { U.msg = err; draw(); }, prev);
     });
     const jb = $('joinBtn'); if (jb) jb.addEventListener('click', () => {
-      keep(); const code = (joinCode || '').trim().toUpperCase();
-      if (code.length !== 4) { msg = '4文字の部屋コードを入れてください'; draw(); return; }
+      keep(); const code = (U.code || '').trim().toUpperCase();
+      if (code.length !== 4) { U.msg = '4文字の部屋コードを入れてください'; draw(); return; }
       jb.disabled = true; jb.textContent = '接続している…';
-      S = null; NET.seatAsked = false;
-      joinRoom(code, (pcName || '').trim() || 'ゲスト', () => { msg = '接続した。ホストの画面が進むと、ここに盤面が出る。'; draw(); }, err => { msg = err; draw(); });
+      S = null;
+      joinRoom(code, (U.pc || '').trim() || 'PC', myNames(), () => drawLobby(), err => { U.msg = err; draw(); });
     });
   };
   $('overlay').hidden = false; draw();
 }
+function drawLobby() {
+  if (S) return;
+  const m = $('modal'); m.dataset.kind = 'lobby';
+  const members = NET.mode === 'host' ? lobbyMembers() : NET.members;
+  const total = members.reduce((a, x) => a + x.names.length, 0);
+  let k = 0;
+  const rows = members.map(x => x.names.map(n => `<div class="g-row" style="grid-template-columns:22px 1fr auto"><span class="g-dot" style="background:${COLORS[k++ % 6]}"></span><b>${esc(n)}</b><small style="color:var(--muted)">${esc(x.pc)}${x.client === CLIENT ? '（このPC）' : ''}</small></div>`).join('')).join('');
+  const watchers = members.filter(x => !x.names.length).length;
+  m.innerHTML = `<div class="g-setup"><div class="kicker">オンライン部屋</div><h2>部屋コード <span class="g-code" style="font-size:32px">${NET.code}</span></h2>
+    <p>${NET.mode === 'host' ? 'ほかのPCで「オンライン：部屋に参加」を開き、このコードを入れてもらう。全員そろったら「ゲーム開始」。' : 'ホストがゲームを始めるのを待っている。始まると、自分のプレイヤーの職業と事業を選ぶ画面が出る。'}</p>
+    <h3 class="g-h">参加しているプレイヤー（${total}/${MAXP}人）</h3><div class="g-opts" style="margin-top:4px;gap:6px">${rows || '<p class="g-na">まだいない</p>'}</div>
+    ${watchers ? `<p style="font-size:12px;color:var(--muted)">観戦のPC：${watchers}台</p>` : ''}
+    ${NET.status ? `<p class="g-na">${esc(NET.status)}</p>` : ''}
+    <div class="g-opts">${NET.mode === 'host' ? `<button type="button" class="g-btn" id="goBtn" ${total < 2 ? 'disabled' : ''}>ゲーム開始${total < 2 ? '（2人以上で開始できる）' : ''}</button>` : ''}<button type="button" class="g-btn ghost" id="leaveBtn">部屋を出る</button></div></div>`;
+  $('overlay').hidden = false;
+  const go = $('goBtn'); if (go) go.addEventListener('click', () => hostStart());
+  $('leaveBtn').addEventListener('click', () => { leaveGame(); S = null; setup(); });
+}
 async function initialPicks() {
-  for (const p of S.players) {
+  for (const p of S.players) await initialPickFor(p);
+}
+async function initialPickFor(p) {
+  {
     const pick = await modal(`<div class="kicker">創業者タイプ</div><h2>${esc(p.name)}：どんな経歴で起業する？</h2><p>得意分野のアクシデントは、最後まで何度でも自分の経験で防げる。</p>`,
       FOUNDERS.map(([n, cs, perk]) => ({ label: n, note: `${perk}／防げる：${cs.map(c => (ACC.find(a => a.no === c) || {}).text).join('、')}`, value: n })));
     p.type = pick;
@@ -1798,19 +1837,23 @@ function load() { try { const s = JSON.parse(localStorage.getItem('ipo-sugoroku-
 
 
 /* ===================== オンライン部屋（PeerJS / WebRTC） =====================
-   ホストのPCが部屋を持ち、ゲストは4文字の部屋コードで参加する。
-   手番を操作したPCが盤面の状態をまるごと送り、ホストが全員に配り直す。
+   1. ホストが部屋を作る（自分の名前を入れる）
+   2. ほかのPCが部屋コードで入り、それぞれ自分の名前を入れる（1台で2人以上も可）
+   3. ホストが「ゲーム開始」→ 各PCが自分のプレイヤーの職業・事業を自分で選ぶ
+   4. 各PCは自分のプレイヤーの番だけ操作できる
+   操作したPCが盤面の状態をまるごと送り、ホストが全員に配り直す。
    ============================================================================ */
-const CLIENT = Math.random().toString(36).slice(2, 10);
-const NET = { mode: 'local', peer: null, host: null, guests: [], code: '', seats: 'all', timer: null, status: '' };
+const CLIENT = (() => { try { let c = sessionStorage.getItem('ipo-client'); if (!c) { c = 'c' + Math.random().toString(36).slice(2, 10); sessionStorage.setItem('ipo-client', c); } return c; } catch (e) { return 'c' + Math.random().toString(36).slice(2, 10); } })();
+const NET = { mode: 'local', peer: null, host: null, guests: [], code: '', timer: null, status: '', members: [], present: [], myNames: [], setupRunning: false, retry: 0 };
+const MAXP = 6;
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const makeCode = () => Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
 const peerIdOf = code => 'ipo-sugoroku-v5-' + code.toLowerCase();
 const online = () => NET.mode !== 'local';
 const iAmActor = () => !!(S && S.busy && S.actor === CLIENT);
 const blockedByOther = () => !!(S && S.busy && S.actor && S.actor !== CLIENT);
-const mySeat = i => NET.seats === 'all' || (Array.isArray(NET.seats) && NET.seats.includes(i));
-const canAct = () => !online() || (!blockedByOther() && !!S && mySeat(S.cur) && (NET.mode !== 'guest' || !!NET.host));
+const mySeat = i => !online() || !!(S && S.players[i] && S.players[i].owner === CLIENT);
+const canAct = () => !online() || (!!S && S.phase !== 'setup' && !blockedByOther() && mySeat(S.cur) && (NET.mode === 'host' || !!(NET.host && NET.host.open)));
 const packState = () => { if (S.log.length > 80) S.log = S.log.slice(-80); return JSON.stringify(S); };
 function sendAll(msg, except) { NET.guests.forEach(g => { if (g.open && g.conn !== except) { try { g.conn.send(msg); } catch (e) {} } }); }
 function pushSoon(now) {
@@ -1822,105 +1865,186 @@ function pushNow() {
   if (!online() || !S) return;
   S.rev = (S.rev || 0) + 1; S.at = Date.now();
   const msg = { t: 'state', state: packState(), rev: S.rev, from: CLIENT };
-  if (NET.mode === 'host') sendAll(msg);
+  if (NET.mode === 'host') { sendAll(msg); saveHostRoom(); }
   else if (NET.host && NET.host.open) NET.host.send(msg);
 }
 function applyState(msg) {
-  if (iAmActor()) return false;
+  if (iAmActor() || NET.setupRunning) return false;
   if (S && (msg.rev || 0) <= (S.rev || 0) && S.room === NET.code) return false;
   let ns; try { ns = JSON.parse(msg.state); } catch (e) { return false; }
-  ns.room = NET.code; S = ns;
-  if ($('modal').dataset.kind === 'setup') $('overlay').hidden = true;
+  if (ns.room !== NET.code) return false;
+  S = ns;
+  if ($('modal').dataset.kind === 'setup' || $('modal').dataset.kind === 'lobby') $('overlay').hidden = true;
   render();
+  setTimeout(runSetupIfMine, 0);
   return true;
+}
+
+/* ---- ロビー（ゲーム開始前） ---- */
+function lobbyMembers() {
+  const list = [{ client: CLIENT, names: NET.myNames, pc: 'ホスト' }];
+  NET.guests.filter(g => g.open && g.names && g.names.length).forEach(g => list.push({ client: g.client, names: g.names, pc: g.pc }));
+  return list;
+}
+function broadcastLobby() {
+  NET.members = lobbyMembers();
+  sendAll({ t: 'lobby', members: NET.members });
+  if ($('modal').dataset.kind === 'lobby' && !$('overlay').hidden) drawLobby();
+}
+function broadcastPresent() {
+  NET.present = [CLIENT, ...NET.guests.filter(g => g.open && g.client).map(g => g.client)];
+  sendAll({ t: 'present', ids: NET.present });
+  render();
 }
 function hostHandle(conn, msg) {
   if (!msg || typeof msg !== 'object') return;
+  const g = NET.guests.find(x => x.conn === conn);
   if (msg.t === 'hello') {
-    const g = NET.guests.find(x => x.conn === conn); if (g) g.name = String(msg.name || 'ゲスト').slice(0, 12);
-    if (S) conn.send({ t: 'state', state: packState(), rev: S.rev || 0, from: CLIENT });
-    else conn.send({ t: 'wait' });
-    renderSync(); return;
+    if (g) { g.client = String(msg.client || ''); g.pc = String(msg.pc || 'PC').slice(0, 12); g.names = (msg.names || []).map(n => String(n).slice(0, 12)).filter(Boolean).slice(0, MAXP); }
+    if (S) {
+      // 開始後の参加：観戦（または自分の担当を取り戻す）
+      conn.send({ t: 'state', state: packState(), rev: S.rev || 0, from: CLIENT });
+    } else {
+      const total = lobbyMembers().reduce((a, m) => a + m.names.length, 0);
+      if (total > MAXP) { conn.send({ t: 'full' }); if (g) g.names = []; }
+    }
+    broadcastLobby(); broadcastPresent(); return;
   }
   if (msg.t === 'state') {
-    // ゲストが操作した結果。ホストが受け取って、ほかのゲストに配り直す
-    if (applyState(msg)) sendAll({ t: 'state', state: packState(), rev: S.rev, from: msg.from }, conn);
+    if (applyState(msg)) { sendAll({ t: 'state', state: packState(), rev: S.rev, from: msg.from }, conn); saveHostRoom(); }
   }
 }
 function guestHandle(msg) {
   if (!msg || typeof msg !== 'object') return;
-  if (msg.t === 'state') { applyState(msg); renderSync(); if (S && !NET.seatAsked && !S.busy) { NET.seatAsked = true; chooseSeats(); } }
-  if (msg.t === 'wait') { NET.status = 'ホストがゲームを始めるのを待っている…'; renderSync(); }
+  if (msg.t === 'lobby') { NET.members = msg.members || []; if (!S) drawLobby(); }
+  if (msg.t === 'present') { NET.present = msg.ids || []; render(); }
+  if (msg.t === 'full') { NET.status = '満員のため、プレイヤーとしては参加できない（観戦はできる）'; if (!S) drawLobby(); }
+  if (msg.t === 'state') { applyState(msg); renderSync(); }
   if (msg.t === 'bye') { NET.status = 'ホストが部屋を閉じた'; renderSync(); }
 }
-function createRoom(onReady, onFail) {
+function saveHostRoom() { if (NET.mode !== 'host' || !S) return; try { localStorage.setItem('ipo-host-room', JSON.stringify({ code: NET.code, client: CLIENT, state: S })); } catch (e) {} }
+function savedHostRoom() { try { const r = JSON.parse(localStorage.getItem('ipo-host-room') || 'null'); return r && r.state && r.state.finished < r.state.players.length ? r : null; } catch (e) { return null; } }
+function createRoom(myNames, onReady, onFail, reuse) {
   if (typeof Peer === 'undefined') { onFail('オンライン部屋の部品を読み込めなかった（インターネット接続を確認）'); return; }
   leaveGame();
-  const code = makeCode();
+  const code = reuse ? reuse.code : makeCode();
   const peer = new Peer(peerIdOf(code));
   NET.peer = peer;
-  peer.on('open', () => { NET.mode = 'host'; NET.code = code; NET.seats = 'all'; NET.status = ''; onReady(code); renderSync(); });
+  peer.on('open', () => {
+    NET.mode = 'host'; NET.code = code; NET.myNames = myNames; NET.status = '';
+    if (reuse) { S = reuse.state; reuse.state.players.forEach(p => { if (p.owner === reuse.client) p.owner = CLIENT; }); }
+    onReady(code); broadcastPresent(); renderSync();
+  });
   peer.on('connection', conn => {
-    const g = { conn, name: 'ゲスト', open: false }; NET.guests.push(g);
-    conn.on('open', () => { g.open = true; renderSync(); });
+    const g = { conn, client: '', pc: 'PC', names: [], open: false }; NET.guests.push(g);
+    conn.on('open', () => { g.open = true; });
     conn.on('data', m => hostHandle(conn, m));
-    conn.on('close', () => { g.open = false; NET.guests = NET.guests.filter(x => x !== g); renderSync(); });
+    conn.on('close', () => { g.open = false; NET.guests = NET.guests.filter(x => x !== g); if (!S) broadcastLobby(); broadcastPresent(); renderSync(); });
   });
   peer.on('error', err => {
-    if (err.type === 'unavailable-id') { peer.destroy(); createRoom(onReady, onFail); return; }
+    if (err.type === 'unavailable-id') { peer.destroy(); if (reuse) onFail('前の部屋のコードがまだ使われている。1分ほど待ってから再開してください'); else createRoom(myNames, onReady, onFail); return; }
     if (NET.mode !== 'host') onFail('部屋を作れなかった：' + err.type);
     else { NET.status = '通信エラー：' + err.type; renderSync(); }
   });
   peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
 }
-function joinRoom(code, name, onOk, onFail) {
+function joinRoom(code, pc, names, onOk, onFail) {
   if (typeof Peer === 'undefined') { onFail('オンライン部屋の部品を読み込めなかった（インターネット接続を確認）'); return; }
   leaveGame();
+  NET.myNames = names; NET.joinInfo = { code, pc, names };
   const peer = new Peer(); NET.peer = peer;
   peer.on('open', () => {
     const conn = peer.connect(peerIdOf(code), { reliable: true });
-    conn.on('open', () => { NET.mode = 'guest'; NET.code = code; NET.host = conn; NET.seats = []; NET.status = ''; conn.send({ t: 'hello', name }); onOk(); renderSync(); });
+    conn.on('open', () => { NET.mode = 'guest'; NET.code = code; NET.host = conn; NET.status = ''; NET.retry = 0; conn.send({ t: 'hello', client: CLIENT, pc, names }); onOk(); renderSync(); });
     conn.on('data', guestHandle);
-    conn.on('close', () => { NET.host = null; NET.status = 'ホストとの接続が切れた（ホストのPCで部屋が開いているか確認して、参加し直す）'; render(); });
+    conn.on('close', () => {
+      NET.host = null; render();
+      if (NET.mode === 'guest' && NET.retry < 5) { NET.retry++; NET.status = `ホストとの接続が切れた。つなぎ直している…（${NET.retry}回目）`; renderSync(); setTimeout(() => reconnectGuest(), 3000); }
+      else { NET.status = 'ホストとの接続が切れた（ホストのPCで部屋が開いているか確認して、参加し直す）'; renderSync(); }
+    });
   });
-  peer.on('error', err => onFail(err.type === 'peer-unavailable' ? 'その部屋が見つからない。コードを確認してください' : '接続エラー：' + err.type));
+  peer.on('error', err => {
+    if (NET.mode === 'guest' && NET.retry) { NET.status = 'つなぎ直せなかった（ホストのPCを確認）'; renderSync(); return; }
+    onFail(err.type === 'peer-unavailable' ? 'その部屋が見つからない。コードを確認してください' : '接続エラー：' + err.type);
+  });
+}
+function reconnectGuest() {
+  const j = NET.joinInfo; if (!j) return;
+  const keepS = S, retry = NET.retry;
+  joinRoom(j.code, j.pc, j.names, () => { NET.retry = 0; }, () => {});
+  S = keepS; NET.retry = retry; NET.mode = 'guest'; NET.code = j.code;
 }
 function leaveGame() {
   if (NET.mode === 'host') sendAll({ t: 'bye' });
   if (NET.peer) { try { NET.peer.destroy(); } catch (e) {} }
-  Object.assign(NET, { mode: 'local', peer: null, host: null, guests: [], code: '', seats: 'all', status: '' });
+  Object.assign(NET, { mode: 'local', peer: null, host: null, guests: [], code: '', status: '', members: [], present: [], setupRunning: false });
 }
-async function chooseSeats() {
-  if (!S) return;
-  const opts = S.players.map((q, i) => ({ label: `${esc(q.name)}を操作する`, value: [i] }));
-  opts.push({ label: 'すべてのプレイヤーを操作する', note: '1台で複数人ぶんを入力するとき', value: 'all' });
-  opts.push({ label: '観戦だけする', value: [] });
-  NET.seats = await modal(`<div class="kicker">部屋 ${NET.code}</div><h2>このPCで操作するプレイヤーは？</h2><p>自分の番になったときだけ、このPCのボタンが押せるようになる。あとから右上の「操作するプレイヤーを変える」で変えられる。</p>`, opts);
-  if (S) S.view = null;
-  render();
+
+/* ---- ゲーム開始（ホスト） ---- */
+function hostStart() {
+  const members = lobbyMembers();
+  const roster = [];
+  members.forEach(m => m.names.forEach(n => { if (roster.length < MAXP) roster.push({ name: n, owner: m.client }); }));
+  if (roster.length < 2) return;
+  S = newState(roster.map(r => r.name));
+  S.players.forEach((p, i) => p.owner = roster[i].owner);
+  S.room = NET.code; S.title = '部屋' + NET.code; S.phase = 'setup'; S.cur = 0;
+  log('メンバーがそろった。各自のPCで、創業者タイプと何で起業するかを順番に選ぶ。');
+  $('overlay').hidden = true;
+  render(); pushNow(); saveHostRoom();
+  runSetupIfMine();
 }
+/* ---- 最初の準備：自分のプレイヤーの分だけ、自分のPCで選ぶ ---- */
+async function runSetupIfMine() {
+  if (!S || S.phase !== 'setup' || S.busy || NET.setupRunning) return;
+  if (!mySeat(S.cur)) return;
+  NET.setupRunning = true;
+  const p = S.players[S.cur];
+  S.busy = true; S.actor = CLIENT; S.actorName = p.name; render(); pushSoon(true);
+  try { await initialPickFor(p); }
+  finally {
+    S.busy = false; S.actor = null; S.view = null;
+    if (S.cur < S.players.length - 1) S.cur++;
+    else { S.phase = 'play'; S.cur = 0; log('全員の準備ができた。ゲーム開始！ 左上のSTARTから時計回りに進み、中央のGOAL（プライム市場）をめざす。'); }
+    render(); pushNow();
+    NET.setupRunning = false;
+  }
+  runSetupIfMine();
+}
+function claimSeat(i) {
+  if (!S || !S.players[i] || S.busy) return;
+  S.players[i].owner = CLIENT;
+  log(`${esc(S.players[i].name)}の担当を、このPCが引き継いだ。`);
+  pushSoon(true); render(); runSetupIfMine();
+}
+
+/* ---- 右上の表示 ---- */
 function renderSync() {
   const bar = $('syncbar'); if (!bar) return;
   if (!online()) { bar.className = 'g-sync local'; bar.innerHTML = 'このPCだけで遊ぶモード'; return; }
   const parts = [];
-  if (NET.mode === 'host') parts.push(`部屋コード <b class="g-code">${NET.code}</b>（ホスト・参加中のPC ${NET.guests.filter(g => g.open).length}台${NET.guests.filter(g => g.open).length ? '：' + NET.guests.filter(g => g.open).map(g => esc(g.name)).join('、') : ''}）`);
-  else parts.push(`部屋 <b class="g-code">${NET.code}</b> に参加中`);
+  const nOpen = NET.guests.filter(g => g.open).length;
+  parts.push(NET.mode === 'host' ? `部屋コード <b class="g-code">${NET.code}</b>（ホスト・ほかのPC ${nOpen}台）` : `部屋 <b class="g-code">${NET.code}</b> に参加中`);
   if (S) {
-    const mine = NET.seats === 'all' ? 'すべてのプレイヤー' : (NET.seats.length ? NET.seats.map(i => S.players[i] && S.players[i].name).join('、') : '観戦のみ');
-    parts.push(`このPCの担当：${esc(mine)} <button type="button" class="g-link" id="seatBtn">操作するプレイヤーを変える</button>`);
+    const mine = S.players.filter(q => q.owner === CLIENT).map(q => q.name);
+    parts.push(`このPCの担当：${mine.length ? esc(mine.join('、')) : '観戦のみ'}`);
+    const orphan = S.players.map((q, i) => [q, i]).filter(([q]) => q.owner && q.owner !== CLIENT && NET.present.length && !NET.present.includes(q.owner) && !q.done);
+    if (orphan.length) parts.push('接続が切れたプレイヤー：' + orphan.map(([q, i]) => `${esc(q.name)} <button type="button" class="g-link" data-claim="${i}">このPCで引き継ぐ</button>`).join('　'));
   }
   if (NET.status) parts.push(esc(NET.status));
-  if (blockedByOther()) {
+  if (S && S.phase === 'setup') {
+    const p = S.players[S.cur];
+    parts.push(mySeat(S.cur) ? `<b>${esc(p.name)}</b>の準備をこのPCで選んでいる` : `<b>${esc(p.name)}</b>が自分のPCで準備中${S.view ? '：' + esc(S.view) : ''}`);
+  } else if (blockedByOther()) {
     const sec = Math.round((Date.now() - (S.at || Date.now())) / 1000);
-    parts.push(`いま<b>${esc(S.actorName || '')}</b>の番を別のPCで操作中${S.view ? '：' + esc(S.view) : ''}`);
+    parts.push(`いま<b>${esc(S.actorName || '')}</b>が自分のPCで操作中${S.view ? '：' + esc(S.view) : ''}`);
     if (sec > 90) parts.push('<button type="button" class="g-link" id="unlockBtn">操作が止まっている？ ロックを解除</button>');
   } else if (S && !S.busy && S.finished < S.players.length && !mySeat(S.cur)) parts.push(`いまは<b>${esc(S.players[S.cur].name)}</b>の番（担当のPCで操作）`);
   bar.className = 'g-sync on';
   bar.innerHTML = parts.join('<br>');
   const u = $('unlockBtn');
   if (u) u.addEventListener('click', () => { S.busy = false; S.actor = null; S.view = null; log('ロックを解除した（止まっていた手番は途中で終了）'); pushSoon(true); });
-  const sb = $('seatBtn');
-  if (sb) sb.addEventListener('click', () => { if (!S.busy || !iAmActor()) chooseSeats(); });
+  bar.querySelectorAll('[data-claim]').forEach(b => b.addEventListener('click', () => claimSeat(+b.dataset.claim)));
 }
 setInterval(() => { if (blockedByOther()) renderSync(); }, 15000);
 async function initNet() { renderSync(); }
