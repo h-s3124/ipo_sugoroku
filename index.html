@@ -14,7 +14,7 @@
 //# sourceMappingURL=peerjs.min.js.map
 
 </script>
-<title>価値創造ストーリーすごろく</title>
+<title>価値創造ストーリーSVCOすごろく</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@700;800&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap">
@@ -218,7 +218,7 @@ body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-siz
   <text x="1035" y="352" font-size="26" fill="#887755" font-weight="800" letter-spacing="10">SVCO VALUE CREATION STORY</text>
   <line x1="705" y1="374" x2="1365" y2="374" stroke="#887755" stroke-width="2"/>
   <text x="1035" y="474" font-size="104" fill="#00325D" font-weight="800" letter-spacing="4">価値創造ストーリー</text>
-  <text x="1035" y="584" font-size="88" fill="#00325D" font-weight="800" letter-spacing="30">すごろく</text>
+  <text x="1035" y="584" font-size="88" fill="#00325D" font-weight="800" letter-spacing="10"><tspan fill="#887755" letter-spacing="4">SVCO</tspan>すごろく</text>
   <text x="1035" y="648" font-size="28" fill="#1B2433" font-weight="700" letter-spacing="3">起業から、プライム市場へ。</text>
 </g>
 <g><rect x="676" y="1000" width="720" height="250" rx="22" fill="#FFFDF8" fill-opacity=".9" stroke="#887755" stroke-opacity=".35" stroke-width="2"/>
@@ -1875,7 +1875,7 @@ function setup() {
       <label class="g-row" style="grid-template-columns:7em 1fr;margin-top:6px"><span>このPCの名前</span><input id="pcName" value="${esc(U.pc)}" maxlength="12" placeholder="例：2班"></label>
       ${myForm('このPCで遊ぶ人の名前（観戦だけなら空欄のまま）')}
       <div class="g-opts"><button type="button" class="g-btn" id="joinBtn">部屋に参加する</button></div>`;
-    m.innerHTML = `<div class="g-setup"><div class="kicker">SVCO VALUE CREATION STORY</div><h2>価値創造ストーリーすごろく</h2>
+    m.innerHTML = `<div class="g-setup"><div class="kicker">SVCO VALUE CREATION STORY</div><h2>価値創造ストーリーSVCOすごろく</h2>
       <p>全員${yen(RULES.START_CASH)}を持ってスタート。専門家を雇うか、事業に投資するか、お金の使い方を考えながら時価総額100億円（プライム市場）をめざす。サイコロとカードは実物を使い、出た目や引いたカードをここに入力する。</p>
       <div class="g-tabs">${tabs}</div>${body}${U.msg ? `<p class="g-na" style="margin-top:10px">${esc(U.msg)}</p>` : ''}</div>`;
     m.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { keep(); U.tab = b.dataset.tab; U.msg = ''; draw(); }));
