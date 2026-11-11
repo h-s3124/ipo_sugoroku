@@ -162,6 +162,8 @@ body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-siz
 .g-opt.ok{border-color:var(--good);background:#EAF3EA}
 .g-opt.ng{border-color:var(--bad);background:#FBE9E6}
 .g-opt small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.g-back{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line);display:flex;justify-content:flex-start}
+.g-back .g-btn{font-size:13px;padding:8px 12px}
 
 .g-setup h2{font-size:28px}
 .g-row{display:grid;grid-template-columns:22px 1fr;gap:10px;align-items:center}
@@ -1160,6 +1162,7 @@ body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-siz
       <div class="g-log" id="log"></div>
     </section>
     <div class="g-foot">
+      <button class="g-btn ghost" id="undoTurnBtn" type="button" hidden>↶ 直前の手番をやり直す</button>
       <button class="g-btn ghost" id="endBtn" type="button">いまの順位を見る</button>
       <button class="g-btn ghost" id="newBtn" type="button">最初の画面へ</button>
     </div>
@@ -1277,6 +1280,7 @@ function render() {
   $('turnSub').textContent = over ? '' : `手番　（${stageAt(p)}）`;
   $('dice').textContent = S.dice ?? '–';
   document.querySelectorAll('.g-move button').forEach(b => b.disabled = S.busy || over || !canAct());
+  updUndo();
   ['endBtn', 'newBtn'].forEach(id => { const b = $(id); if (b) b.disabled = !!S.busy && !iAmActor(); });
   const pre = over ? '' : ({ '16': 'マス16：先にPMF判定のサイコロを振る（押すと目を聞かれる）', '29': 'マス29：進む道を選んでから移動', '49': 'マス49：管理体制で道が決まる' })[p.pos] || '';
   $('moveNote').textContent = S.phase === 'setup' ? `準備中：${S.players[S.cur].name}が自分のPCで職業と事業を選んでいる` : (online() && !mySeat(S.cur) && !over ? `${S.players[S.cur].name}の番（担当のPCで操作）` : pre);
@@ -1305,16 +1309,64 @@ function render() {
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function log(h, c) { S.log.push({ h, c }); render(); pushSoon(); }
 
+/* ===================== やり直し（1つ前に戻る） ===================== */
+// 手番の始めに盤面を保存し、手番の中で押した選択を記録しておく。
+// 「1つ前に戻る」→ 保存した盤面に戻し、最後の選択の手前まで自動で同じ選択をたどり直す。
+let UNDO = null;      // いまの手番の記録 { snap, moveN, turnNo, answers:[], rands:[], replay:null }
+let LASTTURN = null;  // 直前に終わった手番の記録（手番まるごと取り消し用）
+const _rand = Math.random.bind(Math);
+Math.random = () => {
+  if (UNDO && UNDO.replay && UNDO.replay.rands.length) { const v = UNDO.replay.rands.shift(); UNDO.rands.push(v); return v; }
+  const v = _rand(); if (UNDO) UNDO.rands.push(v); return v;
+};
+const UNDO_SIGNAL = { undo: true };
+// 最後の「本当の選択」（選択肢が2つ以上のもの）の手前までの記録を返す。なければ null
+function trimToChoice(ans) { let k = ans.length - 1; while (k >= 0 && ans[k][1] < 2) k--; return k < 0 ? null : ans.slice(0, k); }
+let modalReject = null;
+function restoreSnap(snap) { const rev = S ? S.rev : 0; S = JSON.parse(snap); S.rev = rev; S.busy = false; S.actor = null; S.view = null; }
+async function undoStep() {
+  if (!UNDO || !modalReject) return;
+  const u = UNDO; const keep = trimToChoice(u.answers);
+  u.restart = keep ? { answers: keep, rands: u.rands.slice(), moveN: u.moveN } : null;
+  const rj = modalReject; modalReject = null; rj(UNDO_SIGNAL);
+}
+function updUndo() {
+  const b = $('undoTurnBtn'); if (!b || !S) return;
+  const ok = !!LASTTURN && !S.busy && LASTTURN.turnNo === S.turnNo && (!online() || LASTTURN.client === CLIENT);
+  b.hidden = !ok;
+  if (ok) b.textContent = `↶ ${LASTTURN.name}さんの手番をやり直す`;
+}
+async function undoLastTurn() {
+  if (!LASTTURN || S.busy) return;
+  const L = LASTTURN;
+  const opts = [];
+  if (trimToChoice(L.answers)) opts.push({ label: '最後の選択からやり直す', note: 'サイコロの目やそれまでの選択はそのまま。最後に選んだところをもう一度選び直す', value: 'last' });
+  opts.push({ label: 'サイコロの入力からやり直す', note: '手番の最初（進む前）に戻る', value: 'all' }, { label: 'キャンセル', value: false });
+  const how = await modal(`<div class="kicker">確認</div><h2>${esc(L.name)}さんの手番をやり直す？</h2>`, opts);
+  if (!how) return;
+  restoreSnap(L.snap); LASTTURN = null;
+  render(); save(); pushSoon(true);
+  if (how === 'last') setTimeout(() => takeTurn(L.moveN, { answers: trimToChoice(L.answers), rands: L.rands.slice() }), 0);
+}
+
 /* ===================== モーダル ===================== */
 function modal(html, options) {
-  return new Promise(resolve => {
+  if (UNDO && UNDO.replay && UNDO.replay.answers.length) {
+    const a = UNDO.replay.answers.shift(); UNDO.answers.push(a);
+    return Promise.resolve(options[Math.min(a[0], options.length - 1)].value);
+  }
+  if (UNDO && UNDO.replay) UNDO.replay = null;
+  return new Promise((resolve, reject) => {
+    const canBack = !!UNDO && !S.busySetup;
+    modalReject = canBack ? reject : null;
     const m = $('modal');
-    m.innerHTML = html + `<div class="g-opts${options.some(o => o.dice) ? ' dice' : ''}${options.some(o => o.card) ? ' cards' : ''}">${options.map((o, i) => `<button class="g-opt${o.card ? ' card' : ''}${o.sub ? ' sub' : ''}" type="button" data-i="${i}">${o.label}${o.note ? `<small>${o.note}</small>` : ''}</button>`).join('')}</div>`;
+    m.innerHTML = html + `<div class="g-opts${options.some(o => o.dice) ? ' dice' : ''}${options.some(o => o.card) ? ' cards' : ''}">${options.map((o, i) => `<button class="g-opt${o.card ? ' card' : ''}${o.sub ? ' sub' : ''}" type="button" data-i="${i}">${o.label}${o.note ? `<small>${o.note}</small>` : ''}</button>`).join('')}</div>${canBack ? `<div class="g-back"><button type="button" class="g-btn ghost" id="backBtn">← 1つ前に戻る${trimToChoice(UNDO.answers) ? '' : '（進む前に戻る）'}</button></div>` : ''}`;
     m.dataset.kind = 'game';
     $('overlay').hidden = false;
     if (S) { const k = m.querySelector('.kicker'), h = m.querySelector('h2'); S.view = [k && k.textContent, h && h.textContent].filter(Boolean).join('：').slice(0, 80); pushSoon(); }
     const btns = m.querySelectorAll('.g-opt');
-    btns.forEach(b => b.addEventListener('click', () => { $('overlay').hidden = true; if (S) S.view = null; resolve(options[+b.dataset.i].value); }));
+    btns.forEach(b => b.addEventListener('click', () => { $('overlay').hidden = true; if (S) S.view = null; modalReject = null; if (UNDO) UNDO.answers.push([+b.dataset.i, options.length]); resolve(options[+b.dataset.i].value); }));
+    const bb = $('backBtn'); if (bb) bb.addEventListener('click', () => { $('overlay').hidden = true; undoStep(); });
     btns[0] && btns[0].focus();
   });
 }
@@ -1792,12 +1844,17 @@ async function decideRoute(p) {
   if (p.pos === '29') { p.route = await modal('<div class="kicker">分岐B</div><h2>事業拡大の決断</h2><p>どちらの道に進む？</p>', [{ label: '内側の近道：一気に拡大', note: 'お金が入るマスが多いが、アクシデントが2つ', value: 'in' }, { label: '外側の大回り：足場固め', note: 'CFOやセキュリティ専門家を確保できる', value: 'out' }]); log(`分岐B：${p.route === 'in' ? '拡大（内側の近道）' : '足場固め（外側の大回り）'}を選んだ。`); }
   if (p.pos === '49') { const ok = p.sups.includes('CFO') || p.sups.includes('SVCO') || p.type === '財務・会計出身'; p.route = ok ? 'in' : 'out'; await info('分岐C　上場申請の判断', ok ? '管理体制は万全！ 内側の近道へ' : '管理体制が弱い。外側の大回りへ', `<p>${ok ? 'CFO・SVCO、または財務・会計出身の創業者が申請をリードできる。' : 'CFOがいないので、申請の前に体制を整える。'}</p>`, '進む'); log(`分岐C：${ok ? '管理体制あり → 内側の近道' : 'CFOなし → 外側の大回り'}`); }
 }
-async function takeTurn(moveN) {
+async function takeTurn(moveN, replay) {
   if (S.busy) return;
-  const p = S.players[S.cur];
-  if (p.done) { nextPlayer(); return; }
+  const p0 = S.players[S.cur];
+  if (p0.done) { nextPlayer(); return; }
   if (!canAct()) return;
+  if (!replay) S.turnNo = (S.turnNo || 0) + 1;
+  UNDO = { snap: JSON.stringify(S), moveN, turnNo: S.turnNo, answers: [], rands: [], replay: replay ? { answers: replay.answers.slice(), rands: replay.rands.slice() } : null };
+  LASTTURN = null;
+  const p = S.players[S.cur];
   S.busy = true; S.actor = CLIENT; S.actorName = p.name; render(); pushSoon(true);
+  let undone = false;
   try {
     await decideRoute(p);
     const r = moveN || await rollAnim();
@@ -1805,9 +1862,20 @@ async function takeTurn(moveN) {
     log(`<b style="color:${p.color}">${esc(p.name)}</b>は<b>${r}</b>マス進む`);
     await stepForward(p, r);
     await resolve(p);
+  } catch (e) {
+    if (e !== UNDO_SIGNAL) throw e;
+    undone = true;
   } finally {
-    S.busy = false; S.actor = null; S.view = null;
-    nextPlayer();
+    if (undone) {
+      const u = UNDO; UNDO = null; modalReject = null;
+      restoreSnap(u.snap); render(); save(); pushSoon(true);
+      if (u.restart) setTimeout(() => takeTurn(u.restart.moveN, u.restart), 0);
+    } else {
+      S.busy = false; S.actor = null; S.view = null;
+      if (UNDO) LASTTURN = { snap: UNDO.snap, turnNo: UNDO.turnNo, name: p.name, client: CLIENT, moveN: UNDO.moveN, answers: UNDO.answers.slice(), rands: UNDO.rands.slice() };
+      UNDO = null; modalReject = null;
+      nextPlayer();
+    }
   }
 }
 function nextPlayer() {
@@ -2246,6 +2314,7 @@ document.addEventListener('keydown', e => {
 });
 
 document.querySelectorAll('.g-move button').forEach(b => b.addEventListener('click', () => takeTurn(+b.dataset.n || 0)));
+$('undoTurnBtn').addEventListener('click', () => undoLastTurn());
 $('endBtn').addEventListener('click', async () => {
   if (!S) return;
   const ok = await modal('<div class="kicker">確認</div><h2>いまの時点で集計する？</h2><p>今の時点の企業価値で順位を見る（ゲームは続けられる）。</p>', [{ label: '集計する', value: true }, { label: '続ける', value: false }]);
