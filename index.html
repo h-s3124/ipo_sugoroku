@@ -162,6 +162,9 @@ body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-siz
 .g-opt.ok{border-color:var(--good);background:#EAF3EA}
 .g-opt.ng{border-color:var(--bad);background:#FBE9E6}
 .g-opt small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.g-modal:has([data-kind=result]){max-width:980px}
+.g-results small{font-weight:500;color:var(--muted)}
+.g-results th:nth-child(3),.g-results td:nth-child(3){text-align:left}
 .g-back{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line);display:flex;justify-content:flex-start}
 .g-back .g-btn{font-size:13px;padding:8px 12px}
 
@@ -1250,7 +1253,7 @@ function newState(names) {
   ACC.forEach(a => { (accDecks[a.deck] = accDecks[a.deck] || []).push(a); });
   Object.keys(accDecks).forEach(k => accDecks[k] = shuffle(accDecks[k]));
   return {
-    v: 5, title: '', rev: 0, busy: false, actor: null, actorName: '', view: null,
+    v: 5, gameId: 'g' + Date.now() + Math.floor(_rand() * 1000), title: '', rev: 0, busy: false, actor: null, actorName: '', view: null,
     players: names.map((n, i) => ({ name: n, color: COLORS[i], type: null, pos: '0', trail: ['0'], cash: RULES.START_CASH, debt: 0, biz: null, prods: [], inv: [], sups: [], gm: 1, accs: [], vadj: 0, funded: [], fixedSeen: [], bought: [], fpen: false, ipoMul: 1, goalBonus: 0, rest: false, gate: false, done: 0, lastFund: 0 })),
     cur: 0, finished: 0,
     supDecks, accDecks, accDiscard: {},
@@ -1281,6 +1284,7 @@ function render() {
   $('dice').textContent = S.dice ?? '–';
   document.querySelectorAll('.g-move button').forEach(b => b.disabled = S.busy || over || !canAct());
   updUndo();
+  if (S.finished && S.finished === S.players.length) autoRecord();
   ['endBtn', 'newBtn'].forEach(id => { const b = $(id); if (b) b.disabled = !!S.busy && !iAmActor(); });
   const pre = over ? '' : ({ '16': 'マス16：先にPMF判定のサイコロを振る（押すと目を聞かれる）', '29': 'マス29：進む道を選んでから移動', '49': 'マス49：管理体制で道が決まる' })[p.pos] || '';
   $('moveNote').textContent = S.phase === 'setup' ? `準備中：${S.players[S.cur].name}が自分のPCで職業と事業を選んでいる` : (online() && !mySeat(S.cur) && !over ? `${S.players[S.cur].name}の番（担当のPCで操作）` : pre);
@@ -1889,14 +1893,87 @@ function nextPlayer() {
   }
   render(); save();
 }
+/* ===================== 結果と記録 ===================== */
+const HISTORY_KEY = 'svco-sugoroku-history';
+const stripTags = h => String(h).replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+const fmtDate = t => { const d = new Date(t); const z = n => String(n).padStart(2, '0'); return `${d.getFullYear()}/${z(d.getMonth() + 1)}/${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; };
+function resultRows(st) {
+  return st.players.map(q => ({
+    name: q.name, type: q.type || '', biz: (q.prods || []).map(x => x.name).join('＋'), done: q.done || 0,
+    market: q.done ? (q.market || '') : '未ゴール', cash: q.cash, prod: totalProd(q), debt: q.debt, stars: starSum(q),
+    mult: multOf(q), gm: q.gm || 1, bonus: q.goalBonus || 0, val: valuation(q),
+    sups: q.sups.join('・'), inv: q.inv.map(x => x.name + (x.flip ? '(×)' : '')).join('・')
+  })).sort((a, b) => b.val - a.val);
+}
+function makeRecord(st, final) {
+  return { id: st.gameId || ('g' + Date.now()), at: Date.now(), final, room: st.room || '', rows: resultRows(st), log: st.log.map(x => stripTags(x.h)) };
+}
+function loadHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch (e) { return []; } }
+function saveRecord(rec) {
+  try { const h = loadHistory().filter(x => x.id !== rec.id); h.unshift(rec); localStorage.setItem(HISTORY_KEY, JSON.stringify(h.slice(0, 30))); } catch (e) {}
+}
+let RECORDED = null;
+function autoRecord() {
+  if (S && RECORDED && RECORDED === S.gameId) return;
+  if (!S || !S.players || !S.players.length || S.finished !== S.players.length) return;
+  if (!S.gameId) S.gameId = 'g' + Date.now();
+  const h = loadHistory(); if (h.some(x => x.id === S.gameId && x.final)) return;
+  saveRecord(makeRecord(S, true)); RECORDED = S.gameId;
+}
+function download(name, text, type) {
+  const blob = new Blob(['﻿' + text], { type: type + ';charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+const csvCell = v => { const t = String(v ?? ''); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+function recordCsv(rec) {
+  const head = ['順位', '名前', '創業者の職業', 'プロダクト', 'ゴール順', '結果', '企業価値（万円）', '手元資金（万円）', 'プロダクトの価値（万円）', '借入（万円）', '★の合計', 'CFO/SVCO倍率', '上場審査の倍率', 'ゴール順ボーナス（万円）', 'サポーター', '投資'];
+  const body = rec.rows.map((r, i) => [i + 1, r.name, r.type, r.biz, r.done || '', r.market, r.val, r.cash, r.prod, r.debt, r.stars, r.mult, r.gm, r.bonus, r.sups, r.inv]);
+  return [['価値創造ストーリーSVCOすごろく 結果', fmtDate(rec.at), rec.final ? '最終結果' : '途中集計', rec.room ? '部屋' + rec.room : ''], head, ...body].map(r => r.map(csvCell).join(',')).join('\r\n');
+}
+function recordText(rec) {
+  return [`価値創造ストーリーSVCOすごろく　${rec.final ? '最終結果' : '途中集計'}（${fmtDate(rec.at)}）`, '',
+    ...rec.rows.map((r, i) => `${i + 1}位　${r.name}（${r.type}・${r.biz}）　企業価値 ${yen(r.val)}　${r.market}`), '', '―― できごとの記録 ――', ...rec.log].join('\r\n');
+}
+function fileStamp(t) { const d = new Date(t); const z = n => String(n).padStart(2, '0'); return `${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}`; }
+function resultTable(rows) {
+  return `<div style="overflow-x:auto"><table class="g-results"><thead><tr><th>順位</th><th>名前</th><th>職業・プロダクト</th><th>ゴール</th><th>手元資金</th><th>プロダクト</th><th>借入</th><th>倍率</th><th>ボーナス</th><th>企業価値</th></tr></thead><tbody>
+    ${rows.map((r, i) => `<tr class="${i === 0 ? 'win' : ''}"><td>${i + 1}</td><td><b>${esc(r.name)}</b><br><small>${esc(r.market)}</small></td><td><small>${esc(r.type)}<br>${esc(r.biz)}</small></td><td>${r.done ? r.done + '番目' : '—'}</td><td>${yen(r.cash)}</td><td>${yen(r.prod)}<br><small>★${r.stars}</small></td><td>${r.debt ? '−' + yen(r.debt) : '—'}</td><td>×${r.mult}<br><small>審査×${r.gm}</small></td><td>${r.bonus ? '+' + yen(r.bonus) : '—'}</td><td><b>${yen(r.val)}</b></td></tr>
+    <tr><td></td><td colspan="9" style="text-align:left"><small>サポーター：${esc(r.sups || 'なし')}　／　投資：${esc(r.inv || 'なし')}</small></td></tr>`).join('')}
+    </tbody></table></div>`;
+}
+async function showRecord(rec, fromHistory) {
+  for (;;) {
+    const html = `<div class="kicker" data-kind="result">${rec.final ? '最終結果' : '途中集計'}　${fmtDate(rec.at)}</div><h2>${rec.final ? '総合優勝' : 'いまの1位'}：${esc(rec.rows[0].name)}（企業価値 ${yen(rec.rows[0].val)}）</h2>${resultTable(rec.rows)}
+      <p style="font-size:12.5px;color:var(--muted);margin-top:8px">${rec.final ? 'この結果は、このPCの「過去の結果」に自動で保存された（最初の画面から見られる）。' : ''}CSVはExcelで開ける。</p>`;
+    const opts = [{ label: '結果をCSVで保存', value: 'csv', note: '順位・企業価値の内訳・サポーター・投資' }, { label: 'ゲームの記録を保存（テキスト）', value: 'txt', note: '結果と、できごとの記録すべて' }];
+    opts.push(fromHistory ? { label: '戻る', value: 'back' } : { label: '盤面を見る', value: 'board' });
+    if (!fromHistory) opts.push({ label: '最初の画面へ（新しいゲーム・別のテーブル）', value: 'new' });
+    const v = await modal(html, opts);
+    if (v === 'csv') { download(`SVCOすごろく_結果_${fileStamp(rec.at)}.csv`, recordCsv(rec), 'text/csv'); continue; }
+    if (v === 'txt') { download(`SVCOすごろく_記録_${fileStamp(rec.at)}.txt`, recordText(rec), 'text/plain'); continue; }
+    if (v === 'new') { leaveGame(); setup(); }
+    return v;
+  }
+}
 function showResults() {
   if (online() && !iAmActor() && $('overlay').hidden === false) return;
-  const rows = S.players.map(q => ({ q, val: valuation(q) })).sort((a, b) => b.val - a.val);
-  const html = `<div class="kicker">最終結果</div><h2>総合優勝：${esc(rows[0].q.name)}（企業価値 ${yen(rows[0].val)}）</h2>
-    <table class="g-results"><thead><tr><th>順位</th><th>名前</th><th>100億円</th><th>手元資金</th><th>プロダクト</th><th>借入</th><th>CFO等</th><th>審査</th><th>ゴール順</th><th>企業価値</th></tr></thead><tbody>
-    ${rows.map((r, i) => `<tr class="${i === 0 ? 'win' : ''}"><td>${i + 1}</td><td>${esc(r.q.name)}</td><td>${r.q.market || '—'}</td><td>${yen(r.q.cash)}</td><td>${yen(totalProd(r.q))}</td><td>${yen(r.q.debt)}</td><td>×${multOf(r.q)}</td><td>×${r.q.gm || 1}</td><td>${r.q.goalBonus ? '+' + yen(r.q.goalBonus) : '—'}</td><td>${yen(r.val)}</td></tr>`).join('')}
-    </tbody></table>`;
-  modal(html, [{ label: '盤面を見る', value: 0 }, { label: '最初の画面へ（新しいゲーム・別のテーブル）', value: 1 }]).then(v => { if (v) { leaveGame(); setup(); } });
+  const final = S.finished === S.players.length;
+  if (final) autoRecord();
+  const rec = final ? (loadHistory().find(x => x.id === S.gameId) || makeRecord(S, true)) : makeRecord(S, false);
+  showRecord(rec, false);
+}
+async function showHistory() {
+  for (;;) {
+    const h = loadHistory();
+    const opts = h.map((r, i) => ({ label: `${fmtDate(r.at)}　1位 ${esc(r.rows[0] ? r.rows[0].name : '')}（${r.rows[0] ? yen(r.rows[0].val) : ''}）`, note: esc(r.rows.map(x => x.name).join('・')) + (r.room ? `　部屋${r.room}` : ''), value: i }));
+    if (h.length) opts.push({ label: 'すべての結果をまとめてCSVで保存', value: 'all' });
+    opts.push({ label: '戻る', value: 'back' });
+    const v = await modal(`<div class="kicker">過去の結果</div><h2>このPCに保存されたゲーム</h2><p>${h.length ? '見たいゲームを選ぶ（新しい順・最大30件）。' : 'まだ保存された結果はない。全員がゴールすると自動で保存される。'}</p>`, opts);
+    if (v === 'back') return;
+    if (v === 'all') { download(`SVCOすごろく_全結果_${fileStamp(Date.now())}.csv`, h.map(recordCsv).join('\r\n\r\n'), 'text/csv'); continue; }
+    await showRecord(h[v], true);
+  }
 }
 
 /* ===================== 開始 ===================== */
@@ -1930,8 +2007,9 @@ function setup() {
       <div class="g-opts"><button type="button" class="g-btn" id="joinBtn">部屋に参加する</button></div>`;
     m.innerHTML = `<div class="g-setup"><div class="kicker">SVCO VALUE CREATION STORY</div><h2>価値創造ストーリーSVCOすごろく</h2>
       <p>全員${yen(RULES.START_CASH)}を持ってスタート。専門家を雇うか、事業に投資するか、お金の使い方を考えながら企業価値100億円をめざす。サイコロとカードは実物を使い、出た目や引いたカードをここに入力する。</p>
-      <div class="g-tabs">${tabs}</div>${body}${U.msg ? `<p class="g-na" style="margin-top:10px">${esc(U.msg)}</p>` : ''}</div>`;
+      <div class="g-tabs">${tabs}</div>${body}${U.msg ? `<p class="g-na" style="margin-top:10px">${esc(U.msg)}</p>` : ''}<p style="margin-top:14px"><button type="button" class="g-link" id="histBtn">過去の結果を見る（${loadHistory().length}件）</button></p></div>`;
     m.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { keep(); U.tab = b.dataset.tab; U.msg = ''; draw(); }));
+    const hb0 = $('histBtn'); if (hb0) hb0.addEventListener('click', async () => { keep(); await showHistory(); setup(); });
     m.querySelectorAll('[data-n]').forEach(b => b.addEventListener('click', () => { keep(); U.n = +b.dataset.n; draw(); }));
     m.querySelectorAll('[data-delname]').forEach(b => b.addEventListener('click', () => { keep(); U.my.splice(+b.dataset.delname, 1); draw(); }));
     const an = $('addName'); if (an) an.addEventListener('click', () => { keep(); U.my.push(''); draw(); });
