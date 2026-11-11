@@ -1920,8 +1920,12 @@ function autoRecord() {
   const h = loadHistory(); if (h.some(x => x.id === S.gameId && x.final)) return;
   saveRecord(makeRecord(S, true)); RECORDED = S.gameId;
 }
-function download(name, text, type) {
-  const blob = new Blob(['﻿' + text], { type: type + ';charset=utf-8' });
+async function download(name, text, type) {
+  const blob = new Blob(['\ufeff' + text], { type: type + ';charset=utf-8' });
+  if (window.claude && typeof window.claude.use === 'function') {
+    let dl = null; try { dl = await window.claude.use('downloads'); } catch (e) {}
+    if (dl) { try { await dl.save({ filename: name, data: blob }); } catch (e) { if (e && e.code !== 'declined') await info('保存', '保存できなかった', '<p>この画面ではファイルを保存できない。GitHub版（URLで開くプレイ版）で保存してください。</p>'); } return; }
+  }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
@@ -1950,8 +1954,8 @@ async function showRecord(rec, fromHistory) {
     opts.push(fromHistory ? { label: '戻る', value: 'back' } : { label: '盤面を見る', value: 'board' });
     if (!fromHistory) opts.push({ label: '最初の画面へ（新しいゲーム・別のテーブル）', value: 'new' });
     const v = await modal(html, opts);
-    if (v === 'csv') { download(`SVCOすごろく_結果_${fileStamp(rec.at)}.csv`, recordCsv(rec), 'text/csv'); continue; }
-    if (v === 'txt') { download(`SVCOすごろく_記録_${fileStamp(rec.at)}.txt`, recordText(rec), 'text/plain'); continue; }
+    if (v === 'csv') { await download(`SVCOすごろく_結果_${fileStamp(rec.at)}.csv`, recordCsv(rec), 'text/csv'); continue; }
+    if (v === 'txt') { await download(`SVCOすごろく_記録_${fileStamp(rec.at)}.txt`, recordText(rec), 'text/plain'); continue; }
     if (v === 'new') { leaveGame(); setup(); }
     return v;
   }
@@ -1971,7 +1975,7 @@ async function showHistory() {
     opts.push({ label: '戻る', value: 'back' });
     const v = await modal(`<div class="kicker">過去の結果</div><h2>このPCに保存されたゲーム</h2><p>${h.length ? '見たいゲームを選ぶ（新しい順・最大30件）。' : 'まだ保存された結果はない。全員がゴールすると自動で保存される。'}</p>`, opts);
     if (v === 'back') return;
-    if (v === 'all') { download(`SVCOすごろく_全結果_${fileStamp(Date.now())}.csv`, h.map(recordCsv).join('\r\n\r\n'), 'text/csv'); continue; }
+    if (v === 'all') { await download(`SVCOすごろく_全結果_${fileStamp(Date.now())}.csv`, h.map(recordCsv).join('\r\n\r\n'), 'text/csv'); continue; }
     await showRecord(h[v], true);
   }
 }
