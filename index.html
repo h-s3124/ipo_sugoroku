@@ -1205,6 +1205,11 @@ const SUP_FIN = '金融機関（銀行・公庫）', SUP_VC = 'VC・エンジェ
 const COLORS = ['#C0392B','#1F5FA8','#2E7D4F','#B07A12','#6B3FA0','#0F7F86'];
 const LIMIT = 3;
 const FOUNDERS = RULES.FOUNDERS;
+const CAT_COL = { '金': '#1F5C38', '客': '#8E2A4E', '人': '#8A4512', '開': '#1F4E8A', '数': '#4E3780', '法': '#6B5418', '場': '#3F3A33' };
+// 得意分野の盾マーク（説明書と同じ形・色）
+const shield = (sym, w = 18) => sym ? `<svg width="${w}" height="${Math.round(w * 20 / 18)}" viewBox="0 0 18 20" role="img" aria-label="得意分野 ${((RULES.ACC_CATS || []).find(c => c.sym === sym) || {}).name || sym}" style="display:inline-block;vertical-align:middle;flex:none"><path d="M9 0.8 L16.6 3.4 V9.6 C16.6 14.2 13.4 17.6 9 19.2 C4.6 17.6 1.4 14.2 1.4 9.6 V3.4 Z" fill="${CAT_COL[sym] || '#555'}"></path><text x="9" y="13.4" text-anchor="middle" font-size="9.5" font-weight="900" fill="#FFFFFF">${sym}</text></svg>` : '';
+const catOfSup = s => ((RULES.ACC_CATS || []).find(c => c.sups.includes(s)) || {}).sym;
+const catOfType = t => ((RULES.ACC_CATS || []).find(c => c.founder.includes(t)) || {}).sym;
 const FCOV = {}; FOUNDERS.forEach(([n, cs]) => cs.forEach(c => FCOV[c] = n));
 const kindOf = s => SUP[s].kind;
 const isKeep = s => kindOf(s).startsWith('伴走');
@@ -1701,7 +1706,7 @@ async function flipType(p, type, alt, why) {
 async function drawAccident(p, deck) {
   const all = ACC.filter(a => a.deck === deck);
   const pick = await modal(`<div class="kicker">アクシデント（${deck}の山）</div><h2>${esc(p.name)}：カードを1枚引く</h2><p>${deck}の山から実物のカードを1枚引いて、同じカードを押す。効果と防ぎ方は押したあとに出る。</p>`,
-    [...all.map(a => ({ label: `<span class="h-no">${a.no}</span>${esc(a.text)}`, value: a.no, card: true })), { label: 'アプリで引く', value: '*', sub: true, note: 'カードが手元にないとき' }]);
+    [...all.map(a => ({ label: `${shield(a.catSym, 15)} <span class="h-no">${a.no}</span>${esc(a.text)}${a.noblock ? ' <b style="color:#9E2A1F">✕</b>' : ''}`, value: a.no, card: true })), { label: 'アプリで引く', value: '*', sub: true, note: 'カードが手元にないとき' }]);
   let a;
   if (pick === '*') {
     let d = S.accDecks[deck];
@@ -1715,10 +1720,11 @@ async function drawAccident(p, deck) {
   const byType = FCOV[a.no] && FCOV[a.no] === p.type;
   const body = `<p class="eff">効果：${esc(a.eff)}</p>${a.target ? `<p style="font-size:13px">（${a.target}の投資を持っていれば、そのうち1つを自分で選んで×を付ける＝その★を数えない。持っていない・全部×なら${a.alt ? '現金で損失' : '影響なし'}）</p>` : ''}<div class="g-point"><b>IPOのポイント</b>${(a.sups || []).length ? `「${esc(a.cat || '')}」のトラブルは、${esc(a.sups.join('・'))}に早めに相談しておけば防げる。` : ''}${FCOV[a.no] ? `${esc(FCOV[a.no])}の創業者なら、自分の経験で防げる。` : ''}${a.noblock ? 'だれにも打ち消せない重大な問題。起きないように、日ごろの管理体制とチェックが大事。' : ''}</div>`;
   const opts = [];
-  if (byType) opts.push({ label: `創業者（${p.type}）の経験で防ぐ`, note: '何度でも使える', value: 'type' });
-  if (can) opts.push({ label: `${helper}に頼んで打ち消す`, note: isKeep(helper) ? '伴走サポーターなので手放さない' : 'スポットサポーターなので、頼んだら手放す', value: 'use' });
+  if (byType) opts.push({ label: `${shield(a.catSym, 16)} 創業者（${p.type}）の経験で防ぐ`, note: '何度でも使える', value: 'type' });
+  if (can) opts.push({ label: `${shield(a.catSym, 16)} ${helper}に頼んで打ち消す`, note: isKeep(helper) ? '伴走サポーターなので手放さない' : 'スポットサポーターなので、頼んだら手放す', value: 'use' });
   opts.push({ label: opts.length ? 'そのまま受ける' : '受ける', value: 'take' });
-  const r = await modal(`<div class="kicker">アクシデント（${deck}）　${a.no}・${esc(a.cat || '')}${a.noblock ? '・だれも防げない' : ''}</div><h2>${esc(a.text)}</h2>${body}`, opts);
+  const guard = a.noblock ? '<p style="font-size:13px;color:#9E2A1F;font-weight:700">✕ だれも防げないカード</p>' : `<p style="font-size:13px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${shield(a.catSym, 22)}<b style="color:${CAT_COL[a.catSym]}">${esc(a.cat)}</b>の盾（得意分野）を持つ人が防げる：${esc([...(a.sups || []), ...(((RULES.ACC_CATS || []).find(c => c.sym === a.catSym) || {}).founder || []).map(f => f + '（職業）')].join('・'))}</p>`;
+  const r = await modal(`<div class="kicker">アクシデント（${deck}）　${a.no}</div><h2>${shield(a.catSym, 26)} ${esc(a.text)}</h2>${guard}${body}`, opts);
   if (r === 'type') { hist.result = `${p.type}の経験で防いだ`; hist.blocked = true; log(`${esc(p.name)}：「${esc(a.text)}」→ ${esc(p.type)}の経験で防いだ。`, 'good'); return; }
   if (r === 'use') {
     if (!isKeep(helper)) { p.sups.splice(p.sups.indexOf(helper), 1); returnSup(helper); }
@@ -2123,7 +2129,7 @@ async function initialPicks() {
 async function initialPickFor(p) {
   {
     const pick = await modal(`<div class="kicker">創業者タイプ</div><h2>${esc(p.name)}：どんな経歴で起業する？</h2><p>得意分野のアクシデントは、最後まで何度でも自分の経験で防げる。</p>`,
-      FOUNDERS.map(([n, cs, perk]) => ({ label: n, note: `${perk}／防げる：「${esc(((RULES.ACC_CATS || []).find(c => c.founder.includes(n)) || {}).name || '')}」のアクシデント（${cs.length}枚）`, value: n })));
+      FOUNDERS.map(([n, cs, perk]) => ({ label: `${shield(catOfType(n), 18)} ${n}`, note: `${perk}／得意分野：${esc(((RULES.ACC_CATS || []).find(c => c.founder.includes(n)) || {}).name || '')}（このアクシデント${cs.length}枚を防げる）`, value: n })));
     p.type = pick;
     log(`${esc(p.name)}は<b>${esc(pick)}</b>の創業者としてスタート。`, 'good'); render();
     if (pick === '連続起業家') { earn(p, 500, '前の会社の売却益'); await chooseFromMarket(p, '前の会社のつながりから1人', true); }
@@ -2354,7 +2360,7 @@ function renderHoldings() {
     const item = (kind, id, label, cls = '') => `<button type="button" class="h-item ${cls}" data-kind="${kind}" data-p="${i}" data-id="${esc(String(id))}">${label}</button>`;
     const prods = q.prods.map((x, k) => item('prod', k, `${esc(x.name)}<small>基準 ${yen(x.base)}</small>`, 'prod')).join('');
     const inv = q.inv.map((x, k) => item('inv', k, `<span class="h-tag">${x.type}</span>${esc(x.name)}<small>${starTxt(x)}</small>`, x.flip ? 'inv flip' : 'inv')).join('');
-    const sups = q.sups.map(s => item('sup', s, `${esc(s)}<small>${kindOf(s)}</small>`, isKeep(s) ? 'sup' : 'sup spot')).join('');
+    const sups = q.sups.map(s => item('sup', s, `${shield(catOfSup(s), 14)} ${esc(s)}<small>${kindOf(s)}</small>`, isKeep(s) ? 'sup' : 'sup spot')).join('');
     const accs = (q.accs || []).map((a, k) => item('acc', k, `${esc(a.text)}<small>${esc(a.result)}</small>`, a.blocked ? 'acc ok' : 'acc')).join('');
     return `<section class="h-card" style="--pc:${q.color}">
       <header><span class="g-dot" style="background:${q.color}"></span><b>${esc(q.name)}</b>${q.type ? item('type', q.type, esc(q.type), 'type') : ''}<span class="h-val">企業価値（試算）${yen(valuation(q))}</span></header>
@@ -2372,7 +2378,7 @@ function holdingDetail(kind, pi, id) {
   if (kind === 'sup') {
     const s = id; const d = SUP[s]; if (!d) return '';
     const cancels = ACC.filter(a => (a.sups || []).includes(s));
-    return head('サポーター', esc(s)) + `<p>${esc(SUP_INFO[s] || '')}</p><p class="eff">${kindOf(s)}${isKeep(s) ? '：何度でも力を貸してくれる' : '：1回頼むと手放す'}／${feeText(q, s)}</p>${d.perk ? `<div class="g-point"><b>メリット</b>${esc(d.perk)}</div>` : ''}<p style="font-size:13px"><b>打ち消せるアクシデント（${cancels.length}枚）</b></p>${cancels.length ? `<div class="g-money">${cancels.map(accLine).join('')}</div>` : '<p style="font-size:13px">なし</p>'}`;
+    return head('サポーター', `${shield(catOfSup(s), 22)} ${esc(s)}`) + `${catOfSup(s) ? `<p style="font-size:13px">得意分野：<b style="color:${CAT_COL[catOfSup(s)]}">${esc(((RULES.ACC_CATS || []).find(c => c.sym === catOfSup(s)) || {}).name)}</b>（同じ盾のアクシデントを打ち消せる）</p>` : ''}<p>${esc(SUP_INFO[s] || '')}</p><p class="eff">${kindOf(s)}${isKeep(s) ? '：何度でも力を貸してくれる' : '：1回頼むと手放す'}／${feeText(q, s)}</p>${d.perk ? `<div class="g-point"><b>メリット</b>${esc(d.perk)}</div>` : ''}<p style="font-size:13px"><b>打ち消せるアクシデント（${cancels.length}枚）</b></p>${cancels.length ? `<div class="g-money">${cancels.map(accLine).join('')}</div>` : '<p style="font-size:13px">なし</p>'}`;
   }
   if (kind === 'inv') {
     const x = q.inv[+id]; if (!x) return '';
@@ -2387,7 +2393,7 @@ function holdingDetail(kind, pi, id) {
   if (kind === 'type') {
     const f = FOUNDERS.find(f => f[0] === id); if (!f) return '';
     const cov = ACC.filter(a => f[1].includes(a.no));
-    return head('創業者タイプ', esc(id)) + `<div class="g-point"><b>得意なこと</b>${esc(f[2])}</div><p style="font-size:13px"><b>自分の経験で何度でも防げるアクシデント</b></p><div class="g-money">${cov.map(accLine).join('')}</div>`;
+    return head('創業者タイプ', `${shield(catOfType(id), 22)} ${esc(id)}`) + `<div class="g-point"><b>得意なこと</b>${esc(f[2])}</div><p style="font-size:13px"><b>自分の経験で何度でも防げるアクシデント</b></p><div class="g-money">${cov.map(accLine).join('')}</div>`;
   }
   if (kind === 'acc') {
     const h = (q.accs || [])[+id]; if (!h) return '';
