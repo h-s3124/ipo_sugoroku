@@ -1582,7 +1582,7 @@ const DECKS = ['起業', 'アーリー', 'ミドル', 'レイター', '上場後
 const STAGE_HINT = {
   '起業': '会社をつくる時期。お金が少ないので、雇いすぎるとプロダクトに投資できない。アーリーに入ると組織や資金調達のトラブルが増える。',
   'アーリー': 'PMFと資金調達、仲間集めの時期。お金・人・契約まわりのアクシデントが多い。',
-  'ミドル': '事業拡大の時期。数字の管理とシステム・情報漏えいのリスクが増える。CFOは高いが、ゴール時の企業価値が1.5倍になる。',
+  'ミドル': '事業拡大の時期。数字の管理とシステム・情報漏えいのリスクが増える。CFOがいると予実管理や申請ルートで有利になる。',
   'レイター': '上場準備の本番。監査・労務・契約の不備が審査で問題になる。',
   'IPO': '上場直前。上場後は株価・開示・ガバナンスのトラブルが中心になる。',
   'IPO後': '上場会社として、株価・開示・ガバナンスのトラブルが中心になる。'
@@ -2425,7 +2425,7 @@ function squareInfoHtml(no) {
     parts.push(`<p style="font-size:13px"><b>${sq.deck}の山（${cards.length}枚）</b>：${cards.map(a => esc(a.text)).join('／')}</p>`);
   }
   if (sq.t === 'stop' && INVEST[sq.menu]) {
-    parts.push(`<p style="font-size:13px"><b>投資メニュー</b></p><div class="g-money">${INVEST[sq.menu].map(o => `<span>${o[1]}｜${esc(o[0])}${o[4] ? `（条件：${esc(o[4])}）` : ''}</span><b>${yen(o[2])}${o[1] === 'ピボット' || o[1] === 'プロダクト' ? '' : `・+${o[3]}倍`}</b>`).join('')}</div>`);
+    parts.push(`<p style="font-size:13px"><b>投資メニュー</b></p><div class="g-money">${INVEST[sq.menu].map(o => `<span>${o[1]}｜${esc(o[0])}${o[4] ? `（条件：${esc(o[4])}）` : ''}</span><b>${yen(o[2])}${o[1] === 'ピボット' || o[1] === 'プロダクト' ? '' : o[1] === '研究開発' && RD_STARS[o[0]] ? `・★${RD_STARS[o[0]].join('／')}（サイコロ）` : `・★${o[3]}`}</b>`).join('')}</div>`);
   }
   if ((sq.t === 'fixed') && SUP[sq.sup]) parts.push(`<div class="g-point"><b>${esc(sq.sup)}とは</b>${esc(SUP_INFO[sq.sup] || '')}　${feeText(S && S.players[S.cur] ? S.players[S.cur] : { type: null }, sq.sup)}</div>`);
   if (no === 'GOAL') parts.push('<div class="g-point"><b>実際の基準は？</b>このゲームの目標は「企業価値100億円」。実際に東証のプライム市場へ移るには、時価総額250億円以上、流通株式時価総額100億円以上などの基準がある。</div>');
