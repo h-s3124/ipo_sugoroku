@@ -1251,6 +1251,32 @@ const loanLimit = p => {
 };
 const loanRoom = p => Math.max(0, loanLimit(p) - p.debt);
 const canSpend = (p, v) => p.cash + loanRoom(p) >= v;
+// 借入は「投資」と「サポーターの報酬」のときだけ、自分で額を決めて借りる
+async function borrowModal(p, needs = [], title = '') {
+  const room = loanRoom(p);
+  if (room <= 0) { await info('融資', '融資枠が残っていない', `<p>融資枠（${yen(loanLimit(p))}）をすべて使っている。</p>`); return 0; }
+  const steps = [100, 200, 300, 500, 1000, 2000, 3000, 5000, 10000, 20000, 30000, 50000, 100000];
+  const min = needs.length ? Math.min(...needs.map(n => n[0])) : 0;
+  const opts = [];
+  needs.filter(n => n[0] > 0 && n[0] <= room).sort((a, b) => a[0] - b[0]).forEach(([v, what]) => { if (!opts.some(o => o.value === v)) opts.push({ label: `${yen(v)}借りる`, note: `${what}に足りない分ちょうど`, value: v }); });
+  steps.filter(v => v > min && v < room && !opts.some(o => o.value === v)).slice(0, Math.max(2, 6 - opts.length)).forEach(v => opts.push({ label: `${yen(v)}借りる`, note: '', value: v }));
+  if (!opts.some(o => o.value === room)) opts.push({ label: `${yen(room)}借りる`, note: '融資枠いっぱい', value: room });
+  opts.sort((a, b) => a.value - b.value);
+  const r = await modal(`<div class="kicker">融資（借入）</div><h2>${title || 'いくら借りる？'}</h2><p>手元資金 <b>${yen(p.cash)}</b>／借入残高 <b>${yen(p.debt)}</b>／融資枠 ${yen(loanLimit(p))}（残り <b>${yen(room)}</b>）</p><div class="g-point"><b>借入のルール</b>借りたお金は手元資金に入る。借入残高には自分の番のたびに${rateOf(p)}%の利息がかかり、使わずに持っていても利息は払う。返済は自分の番の最初に選べる。ゴール時の借入残高は企業価値から差し引く。</div>`,
+    [...opts, { label: '借りない', value: 0, sub: true }]);
+  if (r > 0) { p.debt += r; p.cash += r; log(`${esc(p.name)}：融資枠から${yen(r)}を借入（借入残高 ${yen(p.debt)}・手元 ${yen(p.cash)}）`, 'good'); }
+  return r;
+}
+// 手元が足りなければ、借りる額を決めてもらう。払えるようになれば true
+async function ensureCash(p, v, what) {
+  if (p.cash >= v) return true;
+  if (!canSpend(p, v)) return false;
+  while (p.cash < v) {
+    const got = await borrowModal(p, [[v - p.cash, what]], `${esc(what)}：手元が${yen(v - p.cash)}足りない。いくら借りる？`);
+    if (!got) return false;
+  }
+  return true;
+}
 
 /* ===================== 状態 ===================== */
 let S = null;
@@ -1513,7 +1539,8 @@ async function gainSupporter(p, name, free = false) {
       returnSup(p.sups.splice(drop, 1)[0]);
     }
   }
-  if (!free && !canSpend(p, supFee(p, name))) { returnSup(name); await info('サポーター', 'お金が足りない', `<p>${esc(name)}の報酬${yen(supFee(p, name))}を手元のお金で払えないので、確保できない（報酬に借入は使えない）。</p>`); return false; }
+  if (!free && !canSpend(p, supFee(p, name))) { returnSup(name); await info('サポーター', 'お金が足りない', `<p>${esc(name)}の報酬${yen(supFee(p, name))}を、手元資金と融資枠の残りを合わせても払えないので、確保できない。</p>`); return false; }
+  if (!free && !(await ensureCash(p, supFee(p, name), `${name}への報酬`))) { returnSup(name); log(`${esc(p.name)}は借入をせず、${esc(name)}を見送った。`); return false; }
   if (!free) await pay(p, supFee(p, name), `${name}への報酬`);
   p.sups.push(name);
   log(`${esc(p.name)}に<b>${esc(name)}</b>（${kindOf(name)}）がついた。`, 'good');
@@ -1651,15 +1678,17 @@ async function invest(p, menu, title, intro) {
       const label = `<span class="g-chip" style="margin-right:6px">${type}</span>${esc(name)}`;
       if (!condOk(p, cond)) na.push(`<div class="g-na"><b>${type}｜${esc(name)}</b>：${esc(cond)}がいないと投資できない（購入 ${yen(c)}）</div>`);
       else if (p.cash >= c) choices.push({ label: `${label}に投資`, note, value: { idx, c, debt: 0 } });
-      else if (canSpend(p, c)) choices.push({ label: `${label}に借入も使って投資`, note: `${note}／足りない${yen(c - p.cash)}を融資枠から借りる（利息は手番ごとに${rateOf(p)}%）`, value: { idx, c, debt: c - p.cash } });
+      else if (canSpend(p, c)) choices.push({ label: `${label}に借りて投資`, note: `${note}／手元が${yen(c - p.cash)}足りない。先に借りる額を決める（利息は手番ごとに${rateOf(p)}%）`, value: { idx, c, debt: c - p.cash, name } });
       else na.push(`<div class="g-na"><b>${type}｜${esc(name)}</b>：お金が足りない（購入 ${yen(c)}）</div>`);
     });
+    if (loanRoom(p) > 0) choices.push({ label: `融資枠から借りる（残り${yen(loanRoom(p))}）`, note: '先に借りて手元資金を増やしてから投資する', value: 'borrow', sub: true });
     choices.push({ label: bought.length ? '投資を終える' : '今回は投資しない', value: 'end' });
     const r = await modal(`<div class="kicker">投資（マス${menu}・全員共通のメニュー）</div><h2>${title}</h2><p>${intro}</p><div class="g-money"><span>手元資金</span><b>${yen(p.cash)}</b><span>借入残高</span><b>${yen(p.debt)}</b><span>プロダクト</span><b>${yen(baseSum(p))} ×（1＋★${starSum(p)}）＝ ${yen(totalProd(p))}</b>${loanLimit(p) ? `<span>融資枠の残り</span><b>${yen(loanRoom(p))}（枠 ${yen(loanLimit(p))}）</b>` : ''}</div>${na.join('')}`, choices);
     if (r === 'end') break;
+    if (r === 'borrow') { await borrowModal(p, choices.filter(x => x.value && x.value.debt).map(x => [x.value.debt, x.value.name])); continue; }
     if (r === 'repay') { const v = Math.min(p.cash, p.debt); p.cash -= v; p.debt -= v; log(`${esc(p.name)}：借入を${yen(v)}返済（残高 ${yen(p.debt)}）`, 'good'); continue; }
     const { idx, c, debt } = r; const [name, type, , m0] = items[idx];
-    if (debt) { p.debt += debt; p.cash += debt; log(`${esc(p.name)}：融資枠から${yen(debt)}を借入（借入残高 ${yen(p.debt)}）`, 'good'); }
+    if (debt && !(await ensureCash(p, c, items[idx][0]))) continue;
     p.cash -= c; bought.push(idx); (p.bought = p.bought || []).push(items[idx][0]);
     if (type === 'ピボット') {
       const opts = BUSINESS.filter(b => b[0] !== p.biz.name);
@@ -1792,7 +1821,7 @@ async function resolve(p) {
       (p.fixedSeen = p.fixedSeen || []).push(node);
       if (!takeFromDeck(sq.sup)) { await chooseFromMarket(p, `${sq.sup}の山が尽きた`); break; }
       const okPay = canSpend(p, supFee(p, sq.sup));
-      const r = await modal(`<div class="kicker">サポーター</div><h2>${esc(sq.sup)}を確保する？</h2><p>${feeText(p, sq.sup)}。手元：<b>${yen(p.cash)}</b>${okPay ? '' : '<br><b>手元のお金が足りないので確保できない（報酬に借入は使えない）。</b>'}</p>`, [...(okPay ? [{ label: `確保する`, note: supNote(sq.sup, p), value: true }] : []), { label: '見送る', note: 'お金をプロダクトに回す', value: false }]);
+      const r = await modal(`<div class="kicker">サポーター</div><h2>${esc(sq.sup)}を確保する？</h2><p>${feeText(p, sq.sup)}。手元：<b>${yen(p.cash)}</b>${okPay ? '' : '<br><b>手元資金と融資枠の残りを合わせても足りないので確保できない。</b>'}</p>`, [...(okPay ? [{ label: `確保する`, note: supNote(sq.sup, p), value: true }] : []), { label: '見送る', note: 'お金をプロダクトに回す', value: false }]);
       if (r) await gainSupporter(p, sq.sup); else { returnSup(sq.sup); log(`${esc(p.name)}は${sq.sup}を見送った。`); }
       break;
     }
@@ -1824,8 +1853,8 @@ async function resolve(p) {
       break;
     }
     case 'choice': {
-      const afford = o => !(o.v < 0) || o.rest || canSpend(p, -o.v);
-      const o = await modal(`<div class="kicker">選択</div><h2>${esc(sq.name)}</h2><p>どうする？ 手元：<b>${yen(p.cash)}</b></p>`, sq.opts.map(o => afford(o) ? { label: o.label, note: o.note, value: o } : { label: `${o.label}（お金が足りない）`, note: o.note, value: null }).filter(x => x.value));
+      const afford = o => !(o.v < 0) || o.rest || p.cash >= -o.v;
+      const o = await modal(`<div class="kicker">選択</div><h2>${esc(sq.name)}</h2><p>どうする？ 手元：<b>${yen(p.cash)}</b></p>`, sq.opts.map(o => afford(o) ? { label: o.label, note: o.note, value: o } : { label: `${o.label}（手元資金が足りない）`, note: o.note, value: null }).filter(x => x.value));
       if (o.dice) {
         const d = await askDice(esc(sq.name), esc(o.label), `<p>サイコロ${o.dice}以上で成功。</p>`); const win = d >= o.dice;
         await info(sq.name, `出目 ${d}：${win ? '成功！' : '空振り…'}`, `<p>${win ? `+${yen(o.win)}` : (o.lose ? `+${yen(o.lose)}` : '収入なし')}</p>`);
@@ -1840,8 +1869,9 @@ async function resolve(p) {
     case 'svco': {
       const fee = SUP.SVCO.fee;
       const r = await modal(`<div class="kicker">最強カード</div><h2>SVCOを確保する？</h2><p>報酬 ${yen(fee)}。ゴール時の企業価値が×${RULES.SVCO_MULT}。分岐Cでも申請ルートに進める。このマスでしか確保できない。手元：<b>${yen(p.cash)}</b></p>`,
-        [...(p.sups.includes('SVCO') ? [] : canSpend(p, fee) ? [{ label: `SVCOを確保する（${yen(fee)}）`, value: 'svco' }] : [{ label: `SVCOはお金が足りないので確保できない（${yen(fee)}・借入は使えない）`, value: 'none' }]), { label: '交流会でサポーターを探す', note: '自分の時期の山から3枚めくって1人選ぶ', value: 'meet' }, { label: '何もしない', value: 'none' }]);
-      if (r === 'svco') { await pay(p, fee, 'SVCOへの報酬'); p.sups.push('SVCO'); log(`${esc(p.name)}に<b>SVCO</b>がついた！`, 'good'); }
+        [...(p.sups.includes('SVCO') ? [] : canSpend(p, fee) ? [{ label: `SVCOを確保する（${yen(fee)}）`, value: 'svco' }] : [{ label: `SVCOはお金が足りないので確保できない（${yen(fee)}・融資枠の残りを合わせても不足）`, value: 'none' }]), { label: '交流会でサポーターを探す', note: '自分の時期の山から3枚めくって1人選ぶ', value: 'meet' }, { label: '何もしない', value: 'none' }]);
+      if (r === 'svco' && !(await ensureCash(p, fee, 'SVCOへの報酬'))) log(`${esc(p.name)}は借入をせず、SVCOを見送った。`);
+      else if (r === 'svco') { await pay(p, fee, 'SVCOへの報酬'); p.sups.push('SVCO'); log(`${esc(p.name)}に<b>SVCO</b>がついた！`, 'good'); }
       else if (r === 'meet') await chooseFromMarket(p, sq.name);
       break;
     }
