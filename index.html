@@ -115,7 +115,39 @@ body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-siz
 body.app-mode .g-move .g-btn:not(.g-auto){display:none}
 body.app-mode .g-move .g-auto{font-size:18px;padding:14px 0;font-family:var(--f-display)}
 .g-modetog{margin-top:6px;font-size:12px}
-@media (prefers-reduced-motion: reduce){ .fx-drop{animation:none} .fx-card{transition:none} }
+.g-overlay.stage{background:rgba(12,22,38,.82)!important}
+.g-opts.stage-opts{align-items:center}
+.g-opts.stage-opts .g-opt{width:100%}
+.g-modal[data-kind=stage]{background:transparent;box-shadow:none;max-width:900px;padding:8px 8px 14px}
+.g-modal[data-kind=stage] .kicker{color:#E2C98A;text-align:center}
+.g-modal[data-kind=stage] h2{color:#FFFFFF;text-align:center;font-size:22px;margin-bottom:6px}
+.g-modal[data-kind=stage] .stage-lead{color:#E8EDF3;text-align:center;font-size:13px;margin:0 0 12px}
+.g-modal[data-kind=stage] .g-back .g-btn{color:#FFFFFF;border-color:#FFFFFF}
+.g-opts.bigcards{display:flex;flex-direction:row;align-items:flex-start;justify-content:center;gap:18px;flex-wrap:wrap}
+.g-opts.bigcards .g-opt.sub,.stage-opts .g-opt{flex:1 1 100%;max-width:380px;margin:0 auto;text-align:center}
+.g-opt.bigcard{padding:0;border:0;background:transparent;perspective:1100px;animation:dealIn .5s cubic-bezier(.3,.8,.3,1) calc(var(--i) * .22s) both}
+.g-opt.bigcard:hover{border:0}
+.g-opt.bigcard .lift{transition:transform .2s}
+.g-opt.bigcard:hover .lift,.g-opt.bigcard:focus-visible .lift{transform:translateY(-8px)}
+.g-opt.bigcard .fx-card{width:236px;height:min(338px,56vh);transition:none;animation:flipIn .7s cubic-bezier(.3,.8,.3,1) calc(.7s + var(--i) * .28s) both}
+.g-opt.bigcard:hover .front{box-shadow:0 0 0 4px #E2C98A,0 14px 30px rgba(0,0,0,.4)}
+.fx-card .front .fee{font-weight:900;color:#00325D;font-size:12.5px}
+.fx-card .front .perk{background:#F3E6CF;border-radius:8px;padding:6px 8px;color:#4A3A10}
+.fx-card .front .ng{color:#9E2A1F;font-weight:900}
+.fx-card .front .pick{margin-top:auto;align-self:stretch;text-align:center;background:var(--c,#00325D);color:#FFFFFF;border-radius:8px;padding:7px 0;font-weight:900;font-size:13px}
+@keyframes flipIn{from{transform:rotateY(0)}to{transform:rotateY(180deg)}}
+@keyframes dealIn{from{opacity:0;transform:translateY(-150px) rotate(-7deg)}to{opacity:1;transform:none}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes liftUp{0%{transform:translateY(40px) scale(.85)}100%{transform:none}}
+.stage-one{display:flex;justify-content:center;perspective:1100px}
+.stage-one .fx-card{height:min(250px,34vh);width:270px;transition:none;animation:liftUp .55s cubic-bezier(.3,.8,.3,1) both}
+.stage-one .fx-card.go{animation:liftUp .55s cubic-bezier(.3,.8,.3,1) both,flipIn .75s cubic-bezier(.3,.8,.3,1) .6s both}
+.stage-one .front h4{font-size:21px}
+.stage-one .front .eff{font-size:14px}
+.stage-panel{background:var(--card);border-radius:12px;padding:12px 16px 4px;max-width:600px;margin:14px auto 0;animation:fadeUp .4s 1.4s both}
+.stage-opts{animation:fadeUp .4s 1.5s both}
+.stage-later{animation:fadeUp .4s 1.6s both}
+@media (prefers-reduced-motion: reduce){ .fx-drop{animation:none} .fx-card{transition:none} .g-opt.bigcard,.g-opt.bigcard .fx-card,.stage-one .fx-card,.stage-panel,.stage-opts,.stage-later{animation-duration:.01s!important;animation-delay:0s!important} }
 .g-overlay{position:fixed;inset:0;background:rgba(17,28,44,.55);display:grid;place-items:center;z-index:100;padding:16px}
 .g-overlay[hidden]{display:none}
 .g-modal{background:var(--card);border-radius:16px;max-width:520px;width:100%;padding:22px 22px 18px;box-shadow:0 20px 50px rgba(0,0,0,.35);max-height:calc(100% - 32px);overflow:auto}
@@ -1434,7 +1466,7 @@ async function undoLastTurn() {
 }
 
 /* ===================== モーダル ===================== */
-function modal(html, options) {
+function modal(html, options, kind = 'game') {
   if (UNDO && UNDO.replay && UNDO.replay.answers.length) {
     const a = UNDO.replay.answers.shift(); UNDO.answers.push(a);
     return Promise.resolve(options[Math.min(a[0], options.length - 1)].value);
@@ -1444,8 +1476,9 @@ function modal(html, options) {
     const canBack = !!UNDO && !S.busySetup;
     modalReject = canBack ? reject : null;
     const m = $('modal');
-    m.innerHTML = html + `<div class="g-opts${options.some(o => o.dice) ? ' dice' : ''}${options.some(o => o.card) ? ' cards' : ''}">${options.map((o, i) => `<button class="g-opt${o.card ? ' card' : ''}${o.sub ? ' sub' : ''}" type="button" data-i="${i}">${o.label}${o.note ? `<small>${o.note}</small>` : ''}</button>`).join('')}</div>${canBack ? `<div class="g-back"><button type="button" class="g-btn ghost" id="backBtn">← 1つ前に戻る${trimToChoice(UNDO.answers) ? '' : '（進む前に戻る）'}</button></div>` : ''}`;
-    m.dataset.kind = 'game';
+    m.innerHTML = html + `<div class="g-opts${options.some(o => o.dice) ? ' dice' : ''}${options.some(o => o.card) ? ' cards' : ''}${options.some(o => o.html) ? ' bigcards' : ''}${kind === 'stage' && !options.some(o => o.html) ? ' stage-opts' : ''}">${options.map((o, i) => o.html ? `<button class="g-opt bigcard" type="button" data-i="${i}" style="--i:${i}" aria-label="${esc(o.aria || '')}"><div class="lift">${o.html}</div></button>` : `<button class="g-opt${o.card ? ' card' : ''}${o.sub ? ' sub' : ''}${kind === 'stage' && options.some(x => x.html) ? ' stage-later' : ''}" type="button" data-i="${i}">${o.label}${o.note ? `<small>${o.note}</small>` : ''}</button>`).join('')}</div>${canBack ? `<div class="g-back"><button type="button" class="g-btn ghost" id="backBtn">← 1つ前に戻る${trimToChoice(UNDO.answers) ? '' : '（進む前に戻る）'}</button></div>` : ''}`;
+    m.dataset.kind = kind;
+    $('overlay').classList.toggle('stage', kind === 'stage');
     $('overlay').hidden = false;
     if (S) { const k = m.querySelector('.kicker'), h = m.querySelector('h2'); S.view = [k && k.textContent, h && h.textContent].filter(Boolean).join('：').slice(0, 80); pushSoon(); }
     const btns = m.querySelectorAll('.g-opt');
@@ -1624,7 +1657,17 @@ async function chooseFromAppDeck(p, title, free = false) {
   if (!per) { log('サポーターの山が尽きている。'); return; }
   const deck = S.supDecks[per];
   const open = deck.splice(-Math.min(3, deck.length)).reverse();
-  await fxDeal(open, per);
+  if (!window.FAST) {
+    const front = n => { const sym = catOfSup(n); const cat = ((RULES.ACC_CATS || []).find(c => c.sym === sym) || {}).name; const d = SUP[n] || {};
+      return `<div class="no">${sym ? shield(sym, 18) : ''}<span>${esc(d.kind || '')}${cat ? '・得意分野 ' + esc(cat) : ''}</span></div><h4>${esc(n)}</h4><p class="fee">${free ? '報酬なし' : feeText(p, n)}</p><p>${esc(SUP_INFO[n] || '')}</p>${d.perk ? `<p class="perk">${esc(d.perk)}</p>` : ''}${!free && !canSpend(p, supFee(p, n)) ? '<p class="ng">お金が足りない</p>' : ''}<span class="pick">この人を選ぶ</span>`; };
+    const pick = await modal(`<div class="kicker">交流会・${per}の山</div><h2>${title}</h2><p class="stage-lead">${per}の山から${open.length}枚めくった。${free ? '1人を報酬なしで確保できる。' : '報酬を払って1人確保するか、見送る（残りは山の下に戻す）。'}手元 <b>${yen(p.cash)}</b></p>`,
+      [...open.map((n, i) => ({ html: cardHtml(`サポーター<small>${esc(per)}の山</small>`, front(n), '', catOfSup(n) ? CAT_COL[catOfSup(n)] : '#6A4E9B'), aria: n, value: i })), ...(free ? [] : [{ label: 'だれも雇わない', note: 'お金をプロダクトに回す', value: -1, sub: true }])], 'stage');
+    if (pick === -1) { deck.unshift(...open); log(`${esc(p.name)}はだれも雇わなかった。`); return; }
+    const name = open.splice(pick, 1)[0];
+    deck.unshift(...open);
+    await gainSupporter(p, name, free);
+    return;
+  }
   const pick = await modal(`<div class="kicker">交流会・${per}の山</div><h2>${title}</h2><p>${per}の山から${open.length}枚めくった。${free ? '1人を報酬なしで確保できる。' : '報酬を払って1人確保するか、見送るか（残りは山の下に戻す）。'}手元：<b>${yen(p.cash)}</b></p>${hintBox(p)}`,
     [...open.map((s, i) => ({ label: `${s}　<span style="font-weight:500;font-size:13px">${free ? '報酬なし' : feeText(p, s)}</span>`, note: supNote(s, p), value: i })), ...(free ? [] : [{ label: 'だれも雇わない', note: 'お金をプロダクトに回す', value: -1 }])]);
   if (pick === -1) { deck.unshift(...open); log(`${esc(p.name)}はだれも雇わなかった。`); return; }
@@ -1837,8 +1880,8 @@ async function drawAccident(p, deck) {
     let d = S.accDecks[deck];
     if (!d.length) { d = S.accDecks[deck] = shuffle(S.accDiscard[deck] || []); S.accDiscard[deck] = []; }
     a = d.pop(); (S.accDiscard[deck] = S.accDiscard[deck] || []).push(a);
-    await fxAccident(a, deck);
   } else a = all.find(x => x.no === pick);
+  const drawn = pick === '*';
   const hist = { no: a.no, text: a.text, pos: p.pos, result: '', blocked: false };
   (p.accs = p.accs || []).push(hist);
   const helper = (a.sups || []).find(x => p.sups.includes(x));
@@ -1850,7 +1893,10 @@ async function drawAccident(p, deck) {
   if (can) opts.push({ label: `${shield(a.catSym, 16)} ${helper}に頼んで打ち消す`, note: isKeep(helper) ? '伴走サポーターなので手放さない' : 'スポットサポーターなので、頼んだら手放す', value: 'use' });
   opts.push({ label: opts.length ? 'そのまま受ける' : '受ける', value: 'take' });
   const guard = a.noblock ? '<p style="font-size:13px;color:#9E2A1F;font-weight:700">✕ だれも防げないカード</p>' : `<p style="font-size:13px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${shield(a.catSym, 22)}<b style="color:${CAT_COL[a.catSym]}">${esc(a.cat)}</b>の盾（得意分野）を持つ人が防げる：${esc([...(a.sups || []), ...(((RULES.ACC_CATS || []).find(c => c.sym === a.catSym) || {}).founder || []).map(f => f + '（職業）')].join('・'))}</p>`;
-  const r = await modal(`<div class="kicker">アクシデント（${deck}）　${a.no}</div><h2>${shield(a.catSym, 26)} ${esc(a.text)}</h2>${guard}${body}`, opts);
+  const cardFront = `<div class="no">${shield(a.catSym, 20)}<span>${esc(a.no)}　${esc(a.cat || '')}</span></div><h4>${esc(a.text)}</h4><p class="eff">${esc(a.eff)}${a.noblock ? '<br>✕ だれも防げない' : ''}</p>`;
+  const r = drawn
+    ? await modal(`<div class="kicker">アクシデント（${deck}の山）</div><h2>${esc(p.name)}：アクシデント発生！</h2><div class="stage-one">${cardHtml(`アクシデント<small>${esc(deck)}の山</small>`, cardFront, 'go', CAT_COL[a.catSym] || '#9E2A1F')}</div><div class="stage-panel">${guard}${body.replace(/^<p class="eff">[\s\S]*?<\/p>/, '')}</div>`, opts, 'stage')
+    : await modal(`<div class="kicker">アクシデント（${deck}）　${a.no}</div><h2>${shield(a.catSym, 26)} ${esc(a.text)}</h2>${guard}${body}`, opts);
   if (r === 'type') { hist.result = `${p.type}の経験で防いだ`; hist.blocked = true; log(`${esc(p.name)}：「${esc(a.text)}」→ ${esc(p.type)}の経験で防いだ。`, 'good'); return; }
   if (r === 'use') {
     if (!isKeep(helper)) { p.sups.splice(p.sups.indexOf(helper), 1); returnSup(helper); }
