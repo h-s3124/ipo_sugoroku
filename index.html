@@ -149,6 +149,29 @@ body.app-mode .g-move .g-auto{font-size:18px;padding:14px 0;font-family:var(--f-
 .fx-card .front .done{margin-top:auto;text-align:center;font-weight:900;color:#2F7A4F}
 .stage-money{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;color:#E8EDF3;font-size:13px;margin:0 0 12px}
 .stage-money b{color:#FFFFFF}
+.g-modal[data-kind=turn]{max-width:640px;animation:fadeUp .3s both}
+.tr-route{font-size:13px;color:var(--muted)}
+.tr-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:8px 0 10px}
+@media (max-width:560px){ .tr-tiles{grid-template-columns:repeat(2,minmax(0,1fr))} }
+.tr-tile{border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:1px;background:#F3F0E8;border:2px solid transparent;font-variant-numeric:tabular-nums;animation:fadeUp .35s both}
+.tr-tile:nth-child(2){animation-delay:.08s}.tr-tile:nth-child(3){animation-delay:.16s}.tr-tile:nth-child(4){animation-delay:.24s}
+.tr-tile .l{font-size:11.5px;font-weight:700;color:var(--muted)}
+.tr-tile .v{font-family:var(--f-display);font-size:17px;font-weight:800;color:var(--navy);line-height:1.3}
+.tr-tile .d{font-size:13px;font-weight:900}
+.tr-tile .was{font-size:11px;color:var(--muted);min-height:1em}
+.tr-tile.up{background:#EAF3EA;border-color:#9CC9A6}.tr-tile.up .d{color:#1F6B3A}
+.tr-tile.down{background:#FBE9E6;border-color:#E3A69B}.tr-tile.down .d{color:#9E2A1F}
+.tr-tile.same .d{color:#9A9384;font-weight:500}
+.tr-tile.up .d,.tr-tile.down .d{animation:pop .5s .35s both}
+@keyframes pop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.18);opacity:1}100%{transform:scale(1)}}
+.tr-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.tr-chip{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:700;animation:fadeUp .35s .3s both}
+.tr-chip.good{background:#EAF3EA;color:#1F6B3A}.tr-chip.bad{background:#FBE9E6;color:#9E2A1F}
+.tr-log{font-size:12.5px;background:#FFFFFF;border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.tr-log ul{margin:4px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:2px}
+.tr-log li.good::marker{color:#2F7A4F}.tr-log li.bad::marker{color:#B8452F}
+.tr-log li.bad{color:#7A2418}
+.tr-log p{margin:4px 0 0;color:var(--muted)}
 .fx-card .front .fee{font-weight:900;color:#00325D;font-size:12.5px}
 .fx-card .front .perk{background:#F3E6CF;border-radius:8px;padding:6px 8px;color:#4A3A10}
 .fx-card .front .ng{color:#9E2A1F;font-weight:900}
@@ -1595,10 +1618,12 @@ async function stepForward(p, n) {
   }
 }
 function stepBack(p, n) {
+  p.jumps = (p.jumps || 0) + 1;
   for (let i = 0; i < n && p.trail.length > 1; i++) p.trail.pop();
   p.pos = p.trail[p.trail.length - 1]; render();
 }
 function goTo(p, node) {
+  p.jumps = (p.jumps || 0) + 1;
   const k = p.trail.lastIndexOf(node);
   if (k >= 0) p.trail = p.trail.slice(0, k + 1); else p.trail.push(node);
   p.pos = node; render();
@@ -2138,8 +2163,10 @@ async function takeTurn(moveN, replay) {
     const r = moveN || await rollAnim();
     S.dice = r; render();
     log(`<b style="color:${p.color}">${esc(p.name)}</b>は<b>${r}</b>マス進む`);
+    const before = turnSnap(p), logStart = S.log.length;
     await stepForward(p, r);
     await resolve(p);
+    await turnResult(p, before, logStart, r);
   } catch (e) {
     if (e !== UNDO_SIGNAL) throw e;
     undone = true;
@@ -2155,6 +2182,44 @@ async function takeTurn(moveN, replay) {
       nextPlayer();
     }
   }
+}
+/* ===================== 手番の結果（何が起きたか） ===================== */
+function turnSnap(p) {
+  return { pos: p.pos, cash: p.cash, debt: p.debt, stars: starSum(p), prod: totalProd(p), val: valuation(p),
+    inv: p.inv.map(x => ({ name: x.name, type: x.type, flip: !!x.flip, mult: x.mult })), sups: p.sups.slice(), fpen: !!p.fpen, ifrs: !!p.ifrs, rest: !!p.rest, gm: p.gm || 1, jumps: p.jumps || 0 };
+}
+const sqLabel = pos => pos === '0' ? 'START' : pos === 'GOAL' ? 'GOAL' : (SQ[pos] ? `マス${pos}「${SQ[pos].name}」` : `マス${pos}`);
+async function turnResult(p, b, logStart, dice) {
+  if (window.FAST) return;
+  const a = turnSnap(p);
+  const tile = (label, x, y, fmt, unit = '') => {
+    const d = y - x, cls = d > 0 ? 'up' : d < 0 ? 'down' : 'same';
+    return `<div class="tr-tile ${cls}"><span class="l">${label}</span><span class="v">${fmt(y)}${unit}</span><span class="d">${d ? (d > 0 ? '＋' : '−') + fmt(Math.abs(d)) + unit : '変化なし'}</span><span class="was">${d ? '前：' + fmt(x) + unit : ''}</span></div>`;
+  };
+  const debtTile = (x, y) => { const d = y - x, cls = d > 0 ? 'down' : d < 0 ? 'up' : 'same'; return `<div class="tr-tile ${cls}"><span class="l">借入残高</span><span class="v">${yen(y)}</span><span class="d">${d ? (d > 0 ? '＋' : '−') + yen(Math.abs(d)) : '変化なし'}</span><span class="was">${d ? '前：' + yen(x) : ''}</span></div>`; };
+  const chips = [];
+  const newInv = a.inv.slice(b.inv.length);
+  newInv.forEach(x => chips.push(['good', `投資「${esc(x.name)}」★${x.mult}`]));
+  a.inv.slice(0, b.inv.length).forEach((x, i) => {
+    if (x.flip && !b.inv[i].flip) chips.push(['bad', `「${esc(x.name)}」に×（★${x.mult}を数えない）`]);
+    if (!x.flip && b.inv[i].flip) chips.push(['good', `「${esc(x.name)}」の×が外れた（★${x.mult}が戻る）`]);
+  });
+  if (a.inv.length < b.inv.length) chips.push(['bad', `投資を${b.inv.length - a.inv.length}つ売却`]);
+  a.sups.filter(x => !b.sups.includes(x)).forEach(x => chips.push(['good', `${shield(catOfSup(x), 14)} ${esc(x)}がついた`]));
+  b.sups.filter(x => !a.sups.includes(x)).forEach(x => chips.push(['bad', `${esc(x)}が抜けた`]));
+  if (a.rest && !b.rest) chips.push(['bad', '次の番は1回休み']);
+  if (a.fpen && !b.fpen) chips.push(['bad', `次の資金調達は×${RULES.FUND_PENALTY}`]);
+  if (a.ifrs && !b.ifrs) chips.push(['good', 'IFRSに移行した']);
+  if (a.gm !== b.gm) chips.push([a.gm >= 1 ? 'good' : 'bad', `上場審査の評価 ×${a.gm}`]);
+  const lines = S.log.slice(logStart).filter(l => !/マス進む/.test(l.h));
+  const moved = a.jumps !== b.jumps;
+  const html = `<div class="kicker">${esc(p.name)}の手番の結果</div>
+    <h2>${p.done ? 'GOAL！' : esc(sqLabel(a.pos))}</h2>
+    <p class="tr-route">${esc(sqLabel(b.pos))} → 出目${dice}${moved ? ` → <b>${esc(sqLabel(a.pos))}</b>（カードや効果で移動）` : ''}</p>
+    <div class="tr-tiles">${tile('手元資金', b.cash, a.cash, yen)}${debtTile(b.debt, a.debt)}${tile('★の合計', b.stars, a.stars, v => '★' + v)}${tile('企業価値（試算）', b.val, a.val, yen)}</div>
+    ${chips.length ? `<div class="tr-chips">${chips.map(([c, t]) => `<span class="tr-chip ${c}">${t}</span>`).join('')}</div>` : ''}
+    <div class="tr-log"><b>起きたこと</b>${lines.length ? `<ul>${lines.map(l => `<li class="${l.c || ''}">${l.h}</li>`).join('')}</ul>` : '<p>このマスでは何も起きなかった。</p>'}</div>`;
+  await modal(html, [{ label: '次へ', value: true }], 'turn');
 }
 function nextPlayer() {
   if (S.finished === S.players.length) { render(); return showResults(); }
