@@ -81,6 +81,41 @@ body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-siz
 .g-token{position:absolute;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;border:4px solid #FFFFFF;box-shadow:0 4px 10px rgba(0,0,0,.35);display:grid;place-items:center;color:#FFFFFF;font-weight:900;font-size:18px;transition:left .25s ease, top .25s ease;z-index:50;pointer-events:none}
 .g-token.now{width:58px;height:58px;margin:-29px 0 0 -29px;font-size:22px;z-index:60;outline:4px solid #E2C98A}
 
+.fx{position:fixed;inset:0;z-index:150;display:grid;place-items:center;background:rgba(17,28,44,.62);cursor:pointer;-webkit-user-select:none;user-select:none}
+.fx[hidden]{display:none}
+.fx-stage{display:flex;flex-direction:column;align-items:center;gap:14px;perspective:900px}
+.fx-cap{color:#FFFFFF;font-family:var(--f-display);font-size:22px;font-weight:800;text-align:center;min-height:1.4em;text-shadow:0 2px 8px rgba(0,0,0,.35)}
+.fx-cap b{color:#E2C98A;font-size:40px;margin:0 4px}
+.fx-hint{color:#D5DEE8;font-size:12px}
+.fx-drop{animation:fxDrop 1.25s cubic-bezier(.3,.9,.4,1) both}
+@keyframes fxDrop{0%{transform:translateY(-260px)}55%{transform:translateY(0)}70%{transform:translateY(-34px)}85%{transform:translateY(0)}93%{transform:translateY(-8px)}100%{transform:translateY(0)}}
+.fx-cube{width:120px;height:120px;position:relative;transform-style:preserve-3d}
+.fx-face{position:absolute;inset:0;background:#FFFFFF;border:3px solid #00325D;border-radius:20px;display:grid;grid-template:repeat(3,1fr)/repeat(3,1fr);padding:14px;box-sizing:border-box;backface-visibility:hidden}
+.fx-face i{width:22px;height:22px;border-radius:50%;place-self:center;background:#00325D}
+.fx-face.f1 i{width:34px;height:34px;background:#B8452F}
+.fx-face.f1{transform:translateZ(60px)}.fx-face.f2{transform:rotateY(90deg) translateZ(60px)}.fx-face.f3{transform:rotateX(90deg) translateZ(60px)}
+.fx-face.f4{transform:rotateX(-90deg) translateZ(60px)}.fx-face.f5{transform:rotateY(-90deg) translateZ(60px)}.fx-face.f6{transform:rotateY(180deg) translateZ(60px)}
+.fx-shadow{width:110px;height:16px;border-radius:50%;background:rgba(0,0,0,.35);filter:blur(4px);margin-top:-4px}
+.fx-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;max-width:min(94vw,720px)}
+.fx-card{width:190px;height:262px;position:relative;transform-style:preserve-3d;transition:transform .7s cubic-bezier(.3,.8,.3,1),opacity .3s}
+.fx-card.sm{width:150px;height:208px}
+.fx-card .back,.fx-card .front{position:absolute;inset:0;border-radius:14px;backface-visibility:hidden;box-sizing:border-box;display:flex;flex-direction:column;box-shadow:0 10px 24px rgba(0,0,0,.35)}
+.fx-card .back{background:repeating-linear-gradient(45deg,#00325D 0 10px,#0A3F70 10px 20px);border:4px solid #E2C98A;color:#E2C98A;align-items:center;justify-content:center;text-align:center;font-family:var(--f-display);font-weight:800;font-size:17px;gap:6px}
+.fx-card .back small{font-size:12px;color:#FFFFFF;font-family:var(--f-body)}
+.fx-card .front{background:#FFFDF8;border:3px solid var(--c,#00325D);transform:rotateY(180deg);padding:12px 12px 10px;gap:6px;color:#1B2433;text-align:left}
+.fx-card .front .no{font-size:12px;font-weight:700;color:var(--c,#00325D);display:flex;align-items:center;gap:6px}
+.fx-card .front h4{margin:0;font-family:var(--f-display);font-size:17px;line-height:1.35;color:#00325D}
+.fx-card.sm .front h4{font-size:15px}
+.fx-card .front p{margin:0;font-size:12px;line-height:1.45;color:#3F4A57}
+.fx-card .front .eff{margin-top:auto;font-size:12.5px;font-weight:700;color:#9E2A1F;border-top:1px dashed #D9CFB8;padding-top:6px}
+.fx-card.flip{transform:rotateY(180deg)}
+.fx-deck{position:relative;width:190px;height:262px}
+.fx-deck .fx-card{position:absolute;left:0;top:0}
+.fx-deck .pile{position:absolute;inset:0;border-radius:14px;background:#0A3F70;border:4px solid #E2C98A;box-sizing:border-box}
+body.app-mode .g-move .g-btn:not(.g-auto){display:none}
+body.app-mode .g-move .g-auto{font-size:18px;padding:14px 0;font-family:var(--f-display)}
+.g-modetog{margin-top:6px;font-size:12px}
+@media (prefers-reduced-motion: reduce){ .fx-drop{animation:none} .fx-card{transition:none} }
 .g-overlay{position:fixed;inset:0;background:rgba(17,28,44,.55);display:grid;place-items:center;z-index:100;padding:16px}
 .g-overlay[hidden]{display:none}
 .g-modal{background:var(--card);border-radius:16px;max-width:520px;width:100%;padding:22px 22px 18px;box-shadow:0 20px 50px rgba(0,0,0,.35);max-height:calc(100% - 32px);overflow:auto}
@@ -1152,9 +1187,10 @@ body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-siz
           <div class="who" id="turnWho">—</div>
         </div>
       </div>
-      <div class="g-movelbl">サイコロの目を押して進む</div>
+      <div class="g-movelbl" id="moveLbl">サイコロの目を押して進む</div>
       <div class="g-move" role="group" aria-label="進むマス数"><button class="g-btn" type="button" data-n="1" aria-label="1マス進む">1</button><button class="g-btn" type="button" data-n="2" aria-label="2マス進む">2</button><button class="g-btn" type="button" data-n="3" aria-label="3マス進む">3</button><button class="g-btn" type="button" data-n="4" aria-label="4マス進む">4</button><button class="g-btn" type="button" data-n="5" aria-label="5マス進む">5</button><button class="g-btn" type="button" data-n="6" aria-label="6マス進む">6</button><button class="g-btn ghost g-auto" type="button" data-n="0">アプリで振る</button></div>
       <div class="g-movenote" id="moveNote"></div>
+      <div class="g-modetog"><button type="button" class="g-link" id="modeBtn">サイコロ・カード：アプリ</button></div>
     </section>
     <section class="g-panel">
       <h3 class="g-h">プレイヤー</h3>
@@ -1173,6 +1209,7 @@ body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-siz
 </div>
 
 <div class="g-sqinfo" id="sqinfo" hidden aria-live="polite"></div>
+<div class="fx" id="fx" hidden aria-live="polite"></div>
 <div class="g-overlay" id="overlay" hidden><div class="g-modal" id="modal" role="dialog" aria-modal="true"></div></div>
 
 <script>
@@ -1292,7 +1329,7 @@ function newState(names) {
   ACC.forEach(a => { (accDecks[a.deck] = accDecks[a.deck] || []).push(a); });
   Object.keys(accDecks).forEach(k => accDecks[k] = shuffle(accDecks[k]));
   return {
-    v: 5, gameId: 'g' + Date.now() + Math.floor(_rand() * 1000), title: '', rev: 0, busy: false, actor: null, actorName: '', view: null,
+    v: 5, app: true, gameId: 'g' + Date.now() + Math.floor(_rand() * 1000), title: '', rev: 0, busy: false, actor: null, actorName: '', view: null,
     players: names.map((n, i) => ({ name: n, color: COLORS[i], type: null, pos: '0', trail: ['0'], cash: RULES.START_CASH, debt: 0, biz: null, prods: [], inv: [], sups: [], gm: 1, accs: [], vadj: 0, funded: [], fixedSeen: [], bought: [], fpen: false, ipoMul: 1, goalBonus: 0, rest: false, gate: false, done: 0, lastFund: 0 })),
     cur: 0, finished: 0,
     supDecks, accDecks, accDiscard: {},
@@ -1321,6 +1358,10 @@ function render() {
   $('turnWho').style.color = p.color;
   $('turnSub').textContent = over ? '' : `手番　（${stageAt(p)}）`;
   $('dice').textContent = S.dice ?? '–';
+  document.body.classList.toggle('app-mode', S.app !== false);
+  { const mb = $('modeBtn'); if (mb) mb.textContent = S.app !== false ? 'サイコロ・カード：アプリで振る・引く（実物に切り替える）' : 'サイコロ・カード：実物を使う（アプリに切り替える）'; }
+  $('moveLbl').textContent = S.app !== false ? 'サイコロを振って進む' : 'サイコロの目を押して進む';
+  { const ab = document.querySelector('.g-move .g-auto'); if (ab) ab.textContent = S.app !== false ? '🎲 サイコロを振る' : 'アプリで振る'; }
   document.querySelectorAll('.g-move button').forEach(b => b.disabled = S.busy || over || !canAct());
   updUndo();
   if (S.finished && S.finished === S.players.length) autoRecord();
@@ -1562,6 +1603,7 @@ async function confirmSupporter(p, name, free, title) {
 async function chooseFromMarket(p, title, free = false) {
   const per = periodOf(p); const i = PERIODS.indexOf(per);
   const names = Object.keys(SUP).filter(n => SUP[n].decks[i]);
+  if (S.app !== false) return chooseFromAppDeck(p, title, free);
   while (true) {
     const pick = await modal(`<div class="kicker">交流会・${per}の山</div><h2>${title}</h2><p>${per}の山から実物のカードを3枚めくって、雇いたい1枚を選んでから、その名前を押す。${free ? '報酬はかからない。' : ''}解説は押したあとに出る。手元：<b>${yen(p.cash)}</b></p>`,
       [...names.map(n => ({ label: `${esc(n)}<small>${free ? '報酬なし' : feeText(p, n)}</small>`, value: n, card: true })),
@@ -1582,6 +1624,7 @@ async function chooseFromAppDeck(p, title, free = false) {
   if (!per) { log('サポーターの山が尽きている。'); return; }
   const deck = S.supDecks[per];
   const open = deck.splice(-Math.min(3, deck.length)).reverse();
+  await fxDeal(open, per);
   const pick = await modal(`<div class="kicker">交流会・${per}の山</div><h2>${title}</h2><p>${per}の山から${open.length}枚めくった。${free ? '1人を報酬なしで確保できる。' : '報酬を払って1人確保するか、見送るか（残りは山の下に戻す）。'}手元：<b>${yen(p.cash)}</b></p>${hintBox(p)}`,
     [...open.map((s, i) => ({ label: `${s}　<span style="font-weight:500;font-size:13px">${free ? '報酬なし' : feeText(p, s)}</span>`, note: supNote(s, p), value: i })), ...(free ? [] : [{ label: 'だれも雇わない', note: 'お金をプロダクトに回す', value: -1 }])]);
   if (pick === -1) { deck.unshift(...open); log(`${esc(p.name)}はだれも雇わなかった。`); return; }
@@ -1640,16 +1683,69 @@ function hintBox(p) {
 /* ===================== 事業と投資 ===================== */
 function condOk(p, c) { return !c || p.sups.includes(c) || p.type === c; }
 async function askDice(kicker, title, body) {
-  const r = await modal(`<div class="kicker">${kicker}</div><h2>${title}</h2>${body}<p style="font-size:13px;color:var(--muted)">実物のサイコロを振って、出た目を押す。</p>`,
+  const r = S.app !== false
+    ? await modal(`<div class="kicker">${kicker}</div><h2>${title}</h2>${body}`, [{ label: '🎲 サイコロを振る', value: 0 }])
+    : await modal(`<div class="kicker">${kicker}</div><h2>${title}</h2>${body}<p style="font-size:13px;color:var(--muted)">実物のサイコロを振って、出た目を押す。</p>`,
     [1, 2, 3, 4, 5, 6].map(n => ({ label: String(n), value: n, dice: true })).concat([{ label: 'アプリで振る', value: 0, note: 'サイコロが手元にないとき' }]));
   if (r) { S.dice = r; render(); return r; }
   return rollAnim();
 }
 async function rollAnim() {
-  $('dice').classList.add('rolling');
-  for (let i = 0; i < 6; i++) { S.dice = d6(); render(); await wait(60); }
-  $('dice').classList.remove('rolling');
-  const r = d6(); S.dice = r; render(); return r;
+  const r = d6();
+  await fxDice(r);
+  S.dice = r; render(); return r;
+}
+/* ===================== 演出（サイコロ・カード） ===================== */
+const fxOff = () => window.FAST || !!(UNDO && UNDO.replay) || !$('fx');
+function fxRun(html, setup, ms) {
+  if (fxOff()) return Promise.resolve();
+  return new Promise(res => {
+    const el = $('fx'); el.innerHTML = html; el.hidden = false;
+    let done = false; const timers = [];
+    const end = () => { if (done) return; done = true; timers.forEach(clearTimeout); el.hidden = true; el.innerHTML = ''; el.onclick = null; res(); };
+    const at = (t, f) => timers.push(setTimeout(() => { if (!done) f(); }, t));
+    el.onclick = end;
+    requestAnimationFrame(() => requestAnimationFrame(() => setup(el, at)));
+    at(ms, end);
+  });
+}
+const PIPS = { 1: [4], 2: [2, 6], 3: [2, 4, 6], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+const FACE_ROT = { 1: [0, 0], 2: [0, -90], 3: [-90, 0], 4: [90, 0], 5: [0, 90], 6: [0, -180] };
+function fxDice(r) {
+  const face = n => `<div class="fx-face f${n}">${Array.from({ length: 9 }, (_, i) => PIPS[n].includes(i) ? `<i style="grid-area:${Math.floor(i / 3) + 1}/${i % 3 + 1}"></i>` : '').join('')}</div>`;
+  const html = `<div class="fx-stage"><div class="fx-drop"><div class="fx-cube" id="fxCube">${[1, 2, 3, 4, 5, 6].map(face).join('')}</div></div><div class="fx-shadow"></div><div class="fx-cap" id="fxCap">サイコロを振っています…</div><div class="fx-hint">タップで閉じる</div></div>`;
+  return fxRun(html, (el, at) => {
+    const c = $('fxCube'); const [fx, fy] = FACE_ROT[r];
+    c.style.transform = `rotateX(${Math.floor(_rand() * 360)}deg) rotateY(${Math.floor(_rand() * 360)}deg)`;
+    void c.offsetWidth;
+    c.style.transition = 'transform 1.2s cubic-bezier(.2,.75,.25,1)';
+    c.style.transform = `rotateX(${fx + 1080}deg) rotateY(${fy + 720}deg)`;
+    at(1250, () => { $('fxCap').innerHTML = `出た目 <b>${r}</b>`; });
+  }, 2400);
+}
+const cardHtml = (back, front, cls = '', col = '#00325D') => `<div class="fx-card ${cls}" style="--c:${col}"><div class="back">${back}</div><div class="front">${front}</div></div>`;
+function fxAccident(a, deck) {
+  const front = `<div class="no">${shield(a.catSym, 18)}<span>${esc(a.no)}　${esc(a.cat || '')}</span></div><h4>${esc(a.text)}</h4><p class="eff">${esc(a.eff)}${a.noblock ? '<br>✕ だれも防げない' : ''}</p>`;
+  const html = `<div class="fx-stage"><div class="fx-deck"><div class="pile" style="transform:translate(6px,6px)"></div><div class="pile" style="transform:translate(3px,3px)"></div>${cardHtml(`アクシデント<small>${esc(deck)}の山</small>`, front, '', CAT_COL[a.catSym] || '#9E2A1F')}</div><div class="fx-cap" id="fxCap">${esc(deck)}の山から1枚引く…</div><div class="fx-hint">タップで閉じる</div></div>`;
+  return fxRun(html, (el, at) => {
+    const c = el.querySelector('.fx-deck .fx-card');
+    at(250, () => { c.style.transform = 'translateY(-40px) scale(1.12)'; });
+    at(800, () => { c.style.transform = 'translateY(-20px) scale(1.18) rotateY(180deg)'; });
+    at(1500, () => { $('fxCap').textContent = 'アクシデント発生！'; });
+  }, 3200);
+}
+function fxDeal(names, per) {
+  const front = n => { const sym = catOfSup(n); const d = SUP[n] || {}; return `<div class="no">${sym ? shield(sym, 16) : ''}<span>${esc(d.kind || '')}</span></div><h4>${esc(n)}</h4><p>${esc(SUP_INFO[n] || '')}</p>`; };
+  const html = `<div class="fx-stage"><div class="fx-row">${names.map(n => cardHtml(`サポーター<small>${esc(per)}の山</small>`, front(n), 'sm', catOfSup(n) ? CAT_COL[catOfSup(n)] : '#6A4E9B')).join('')}</div><div class="fx-cap" id="fxCap">${esc(per)}の山から${names.length}枚めくる…</div><div class="fx-hint">タップで閉じる</div></div>`;
+  return fxRun(html, (el, at) => {
+    const cs = el.querySelectorAll('.fx-card');
+    cs.forEach((c, i) => { c.style.transition = 'none'; c.style.opacity = '0'; c.style.transform = 'translateY(-160px) rotate(-8deg)'; });
+    cs.forEach((c, i) => {
+      at(100 + i * 260, () => { c.style.transition = ''; c.style.opacity = '1'; c.style.transform = 'none'; });
+      at(900 + i * 300, () => { c.style.transform = 'rotateY(180deg)'; });
+    });
+    at(900 + cs.length * 300 + 300, () => { $('fxCap').textContent = '1人選ぼう'; });
+  }, 1700 + names.length * 300 + 1200);
 }
 async function chooseBusiness(p) {
   const pick = await modal(`<div class="kicker">何で起業する？</div><h2>${esc(p.name)}：最初のプロダクトを選ぶ</h2><p>投資するたびに★が増え、プロダクトの価値は「基準価値×（1＋★の合計）」になる。選んだプロダクトと相性のいい種類の投資は★+${RULES.AFFINITY}。手元：<b>${yen(p.cash)}</b></p>`,
@@ -1734,13 +1830,14 @@ async function flipType(p, type, alt, why) {
 /* ===================== アクシデント・クイズ ===================== */
 async function drawAccident(p, deck) {
   const all = ACC.filter(a => a.deck === deck);
-  const pick = await modal(`<div class="kicker">アクシデント（${deck}の山）</div><h2>${esc(p.name)}：カードを1枚引く</h2><p>${deck}の山から実物のカードを1枚引いて、同じカードを押す。効果と防ぎ方は押したあとに出る。</p>`,
+  const pick = S.app !== false ? await modal(`<div class="kicker">アクシデント（${deck}の山）</div><h2>${esc(p.name)}：カードを1枚引く</h2><p>${deck}の山から1枚引く。効果と防ぎ方は引いたあとに出る。</p>`, [{ label: '🃏 カードを引く', value: '*' }]) : await modal(`<div class="kicker">アクシデント（${deck}の山）</div><h2>${esc(p.name)}：カードを1枚引く</h2><p>${deck}の山から実物のカードを1枚引いて、同じカードを押す。効果と防ぎ方は押したあとに出る。</p>`,
     [...all.map(a => ({ label: `${shield(a.catSym, 15)} <span class="h-no">${a.no}</span>${esc(a.text)}${a.noblock ? ' <b style="color:#9E2A1F">✕</b>' : ''}`, value: a.no, card: true })), { label: 'アプリで引く', value: '*', sub: true, note: 'カードが手元にないとき' }]);
   let a;
   if (pick === '*') {
     let d = S.accDecks[deck];
     if (!d.length) { d = S.accDecks[deck] = shuffle(S.accDiscard[deck] || []); S.accDiscard[deck] = []; }
     a = d.pop(); (S.accDiscard[deck] = S.accDiscard[deck] || []).push(a);
+    await fxAccident(a, deck);
   } else a = all.find(x => x.no === pick);
   const hist = { no: a.no, text: a.text, pos: p.pos, result: '', blocked: false };
   (p.accs = p.accs || []).push(hist);
@@ -2097,7 +2194,7 @@ function setup() {
       ${myForm('このPCで遊ぶ人の名前（観戦だけなら空欄のまま）')}
       <div class="g-opts"><button type="button" class="g-btn" id="joinBtn">部屋に参加する</button></div>`;
     m.innerHTML = `<div class="g-setup"><div class="kicker">SVCO VALUE CREATION STORY</div><h2>価値創造ストーリーSVCOすごろく</h2>
-      <p>全員${yen(RULES.START_CASH)}を持ってスタート。専門家を雇うか、事業に投資するか、お金の使い方を考えながら企業価値100億円をめざす。サイコロとカードは実物を使い、出た目や引いたカードをここに入力する。</p>
+      <p>全員${yen(RULES.START_CASH)}を持ってスタート。専門家を雇うか、事業に投資するか、お金の使い方を考えながら企業価値100億円をめざす。サイコロとカードはアプリで振る・引く（実物を使うときは、ゲーム中に右の「サイコロ・カード」で切り替えて、出た目や引いたカードを入力する）。</p>
       <div class="g-tabs">${tabs}</div>${body}${U.msg ? `<p class="g-na" style="margin-top:10px">${esc(U.msg)}</p>` : ''}<p style="margin-top:14px"><button type="button" class="g-link" id="histBtn">過去の結果を見る（${loadHistory().length}件）</button></p></div>`;
     m.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { keep(); U.tab = b.dataset.tab; U.msg = ''; draw(); }));
     const hb0 = $('histBtn'); if (hb0) hb0.addEventListener('click', async () => { keep(); await showHistory(); setup(); });
@@ -2483,6 +2580,7 @@ document.addEventListener('keydown', e => {
 });
 
 document.querySelectorAll('.g-move button').forEach(b => b.addEventListener('click', () => takeTurn(+b.dataset.n || 0)));
+$('modeBtn').addEventListener('click', () => { if (!S || S.busy) return; S.app = S.app === false; log(S.app ? 'サイコロとカードをアプリで振る・引くことにした。' : 'サイコロとカードを実物で使うことにした。'); render(); save(); pushSoon(true); });
 $('undoTurnBtn').addEventListener('click', () => undoLastTurn());
 $('endBtn').addEventListener('click', async () => {
   if (!S) return;
