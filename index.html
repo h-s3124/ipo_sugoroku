@@ -1640,7 +1640,7 @@ async function funding(p, node) {
   if (node === '58' && p.ipoMul && p.ipoMul !== 1) { const before = v; v = Math.round(v * p.ipoMul); notes.push(`ロードショーの結果で×${p.ipoMul}（${yen(before)} → ${yen(v)}）`); }
   let fee = 0;
   if (node === '58' && p.sups.includes(SUP_LEAD)) { fee = Math.round(v * RULES.LEAD_FEE / 100); notes.push(`主幹事証券の引受手数料 −${yen(fee)}`); }
-  await info(`資金調達（マス${node}）`, `出目 ${r}：${yen(v - fee)}を調達`, `<div class="g-money">${notes.map(n => `<span>${n}</span><b></b>`).join('')}</div><div class="g-point"><b>IPOのポイント</b>${esc(STORY[node] ? STORY[node][1] : '')}</div>`, '受け取る');
+  await info(`資金調達（マス${node}）`, `出目 ${r}：${yen(v - fee)}を調達`, `<div class="g-money">${notes.map(n => `<span>${n}</span><b></b>`).join('')}</div><div class="g-point"><b>価値創造のポイント</b>${esc(STORY[node] ? STORY[node][1] : '')}</div>`, '受け取る');
   p.lastFund = v - fee;
   earn(p, v - fee, `${name}で調達`);
 }
@@ -1956,7 +1956,7 @@ async function drawAccident(p, deck) {
   const helper = (a.sups || []).find(x => p.sups.includes(x));
   const can = !!helper;
   const byType = FCOV[a.no] && FCOV[a.no] === p.type;
-  const body = `<p class="eff">効果：${esc(a.eff)}</p>${a.target ? `<p style="font-size:13px">（${a.target}の投資を持っていれば、そのうち1つを自分で選んで×を付ける＝その★を数えない。持っていない・全部×なら${a.alt ? '現金で損失' : '影響なし'}）</p>` : ''}<div class="g-point"><b>IPOのポイント</b>${(a.sups || []).length ? `「${esc(a.cat || '')}」のトラブルは、${esc(a.sups.join('・'))}に早めに相談しておけば防げる。` : ''}${FCOV[a.no] ? `${esc(FCOV[a.no])}の創業者なら、自分の経験で防げる。` : ''}${a.noblock ? 'だれにも打ち消せない重大な問題。起きないように、日ごろの管理体制とチェックが大事。' : ''}</div>`;
+  const body = `<p class="eff">効果：${esc(a.eff)}</p>${a.target ? `<p style="font-size:13px">（${a.target}の投資を持っていれば、そのうち1つを自分で選んで×を付ける＝その★を数えない。持っていない・全部×なら${a.alt ? '現金で損失' : '影響なし'}）</p>` : ''}<div class="g-point"><b>価値創造のポイント</b>${(a.sups || []).length ? `「${esc(a.cat || '')}」のトラブルは、${esc(a.sups.join('・'))}に早めに相談しておけば防げる。` : ''}${FCOV[a.no] ? `${esc(FCOV[a.no])}の創業者なら、自分の経験で防げる。` : ''}${a.noblock ? 'だれにも打ち消せない重大な問題。起きないように、日ごろの管理体制とチェックが大事。' : ''}</div>`;
   const opts = [];
   if (byType) opts.push({ label: `${shield(a.catSym, 16)} 創業者（${p.type}）の経験で防ぐ`, note: '何度でも使える', value: 'type' });
   if (can) opts.push({ label: `${shield(a.catSym, 16)} ${helper}に頼んで打ち消す`, note: isKeep(helper) ? '伴走サポーターなので手放さない' : 'スポットサポーターなので、頼んだら手放す', value: 'use' });
@@ -2003,7 +2003,7 @@ async function resolve(p) {
   const has = s => p.sups.includes(s);
   if (STORY[node] && sq.t !== 'fund') {
     const [story, point] = STORY[node];
-    await info(`${STAGE_OF(node)}・マス${node}`, esc(sq.name), `<p>${esc(story)}</p><div class="g-point"><b>IPOのポイント</b>${esc(point)}</div><p class="eff">効果：${esc(EFF[node] || '')}</p>`, '次へ');
+    await info(`${STAGE_OF(node)}・マス${node}`, esc(sq.name), `<p>${esc(story)}</p><div class="g-point"><b>価値創造のポイント</b>${esc(point)}</div><p class="eff">効果：${esc(EFF[node] || '')}</p>`, '次へ');
   }
   switch (sq.t) {
     case 'money': {
@@ -2093,7 +2093,7 @@ async function resolve(p) {
       p.ipoMul = r === 6 ? 1.2 : r <= 2 ? 0.8 : 1;
       if (r === 1) p.rest = true;
       const msg = r === 1 ? '市況悪化で上場延期（1回休み）' : r === 2 ? '公開価格は仮条件の下限で決定' : r === 6 ? '需要が旺盛で公開価格は上限で決定' : '公開価格は想定どおり';
-      await info('ロードショー', `出目 ${r}：${msg}`, `<p class="eff">IPOで集まるお金 ×${p.ipoMul}</p><div class="g-point"><b>IPOのポイント</b>公開価格は、仮条件を決めて投資家の需要を集める「ブックビルディング」で決まる。公開価格が変わると、上場時に会社が調達できるお金も変わる。</div>`);
+      await info('ロードショー', `出目 ${r}：${msg}`, `<p class="eff">IPOで集まるお金 ×${p.ipoMul}</p><div class="g-point"><b>価値創造のポイント</b>公開価格は、仮条件を決めて投資家の需要を集める「ブックビルディング」で決まる。公開価格が変わると、上場時に会社が調達できるお金も変わる。</div>`);
       log(`${esc(p.name)}：ロードショー ${msg}（IPO調達×${p.ipoMul}）`, p.ipoMul >= 1 ? 'good' : 'bad');
       break;
     }
@@ -2110,7 +2110,7 @@ async function gate(p) {
   const k = Math.min(3, right + (p.type === '財務・会計出身' ? 1 : 0) + (p.course ? 1 : 0));
   p.gm = RULES.GATE_MULT[k]; p.gate = true;
   const msg = { 3: '審査はスムーズに通過。投資家の評価も上々。', 2: '軽い指摘はあったが、予定どおり上場承認。', 1: '指摘への対応に時間がかかり、上場時期がずれ込んだ。そのあいだに市況が冷えて評価が下がった。', 0: '指摘が相次ぎ、上場がかなり遅れた。投資家の目も厳しい。' }[k];
-  await info('上場承認審査', `${right}問正解：上場承認（評価×${p.gm}）`, `<p>${msg}</p><div class="g-point"><b>IPOのポイント</b>上場申請しても、業績の進み具合や市況を理由に上場が延期されるケースは珍しくない。審査で指摘が少ないほど、予定どおりのタイミングで上場しやすい。</div>`);
+  await info('上場承認審査', `${right}問正解：上場承認（評価×${p.gm}）`, `<p>${msg}</p><div class="g-point"><b>価値創造のポイント</b>上場申請しても、業績の進み具合や市況を理由に上場が延期されるケースは珍しくない。審査で指摘が少ないほど、予定どおりのタイミングで上場しやすい。</div>`);
   log(`${esc(p.name)}：上場審査 ${right}問正解 → 評価×${p.gm}`, p.gm >= 1 ? 'good' : 'bad');
 }
 async function goal(p) {
@@ -2138,7 +2138,7 @@ async function decideRoute(p) {
     const add = mods.reduce((a, m) => a + m[1], 0);
     const d = await askDice('分岐A', 'PMF判定', `<p>移動の前に、PMF判定のサイコロを1回振る。サイコロ＋補正が5以上ならPMF達成で内側の近道へ。届かなければ外側の大回り。</p><div class="g-money">${mods.length ? mods.map(m => `<span>${m[0]}</span><b>+${m[1]}</b>`).join('') : '<span>補正なし</span><b>+0</b>'}</div>`); const tot = d + add;
     p.route = tot >= 5 ? 'in' : 'out';
-    await info('PMF判定', p.route === 'in' ? `出目${d}＋${add}＝${tot}：PMF達成！` : `出目${d}＋${add}＝${tot}：まだ届かない`, `<p>${p.route === 'in' ? '市場に受け入れられた。内側の近道へ進む。' : '顧客を見直しながら、外側の大回りで進む。'}</p><div class="g-point"><b>IPOのポイント</b>PMFは「作ったものが市場に求められている」状態。顧客の声を聞く仕組み（マーケティング）と、作り直せる体制（人材）が近道になる。</div>`, '進む');
+    await info('PMF判定', p.route === 'in' ? `出目${d}＋${add}＝${tot}：PMF達成！` : `出目${d}＋${add}＝${tot}：まだ届かない`, `<p>${p.route === 'in' ? '市場に受け入れられた。内側の近道へ進む。' : '顧客を見直しながら、外側の大回りで進む。'}</p><div class="g-point"><b>価値創造のポイント</b>PMFは「作ったものが市場に求められている」状態。顧客の声を聞く仕組み（マーケティング）と、作り直せる体制（人材）が近道になる。</div>`, '進む');
     log(`分岐A：PMF判定 ${tot} → ${p.route === 'in' ? '内側の近道（PMF達成）' : '外側の大回り（ピボット）'}`);
     return;
   }
@@ -2680,7 +2680,7 @@ function holdingDetail(kind, pi, id) {
   if (kind === 'acc') {
     const h = (q.accs || [])[+id]; if (!h) return '';
     const a = ACC.find(a => a.no === h.no) || {};
-    return head('アクシデント', esc(h.text)) + `<p class="eff">${esc(h.result)}</p><p>効果：${esc(a.eff || '')}</p><div class="g-point"><b>IPOのポイント</b>${(a.sups || []).length ? `「${esc(a.cat || '')}」のトラブルは、${esc(a.sups.join('・'))}に早めに相談しておけば防げる。` : ''}${FCOV[a.no] ? `${esc(FCOV[a.no])}の創業者なら、自分の経験で防げる。` : ''}${a.noblock ? 'だれにも打ち消せない重大な問題。日ごろの管理体制とチェックが大事。' : ''}</div><p style="font-size:13px">${esc(STAGE_OF(h.pos || '1'))}・マス${esc(h.pos || '')}で発生</p>`;
+    return head('アクシデント', esc(h.text)) + `<p class="eff">${esc(h.result)}</p><p>効果：${esc(a.eff || '')}</p><div class="g-point"><b>価値創造のポイント</b>${(a.sups || []).length ? `「${esc(a.cat || '')}」のトラブルは、${esc(a.sups.join('・'))}に早めに相談しておけば防げる。` : ''}${FCOV[a.no] ? `${esc(FCOV[a.no])}の創業者なら、自分の経験で防げる。` : ''}${a.noblock ? 'だれにも打ち消せない重大な問題。日ごろの管理体制とチェックが大事。' : ''}</div><p style="font-size:13px">${esc(STAGE_OF(h.pos || '1'))}・マス${esc(h.pos || '')}で発生</p>`;
   }
   return '';
 }
@@ -2701,7 +2701,7 @@ function squareInfoHtml(no) {
   const st = no === 'GOAL' ? 'GOAL' : STAGE_OF(no);
   const parts = [`<div class="kicker">${st}${no === 'GOAL' ? '' : '・マス' + no}｜${esc(sq.kind || '')}</div><h2>${esc(sq.name)}</h2>`];
   parts.push(`<p class="eff">効果：${esc(EFF[no] || '')}</p>`);
-  if (STORY[no]) parts.push(`<p>${esc(STORY[no][0])}</p><div class="g-point"><b>IPOのポイント</b>${esc(STORY[no][1])}</div>`);
+  if (STORY[no]) parts.push(`<p>${esc(STORY[no][0])}</p><div class="g-point"><b>価値創造のポイント</b>${esc(STORY[no][1])}</div>`);
   if (sq.t === 'acc') {
     const cards = ACC.filter(a => a.deck === sq.deck);
     parts.push(`<p style="font-size:13px"><b>${sq.deck}の山（${cards.length}枚）</b>：${cards.map(a => esc(a.text)).join('／')}</p>`);
