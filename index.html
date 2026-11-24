@@ -147,6 +147,20 @@ body.app-mode .g-move .g-auto{font-size:18px;padding:14px 0;font-family:var(--f-
 .fx-card .front .aff{color:#B8452F;font-weight:900}
 .fx-card .front .star{font-weight:900;color:#8C6A1C;font-size:13px}
 .fx-card .front .done{margin-top:auto;text-align:center;font-weight:900;color:#2F7A4F}
+.wallet{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:stretch;margin:8px 0 14px}
+.wallet>div{border-radius:12px;padding:6px 16px 7px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:128px;background:#F1EDE4;line-height:1.25}
+.wallet .l{font-size:12px;font-weight:700;color:var(--muted)}
+.wallet .w-sub b{font-size:17px;color:var(--navy);font-variant-numeric:tabular-nums}
+.wallet .w-main{background:#00325D;box-shadow:inset 0 0 0 2px #E2C98A;min-width:190px}
+.wallet .w-main .l{color:#E2C98A}
+.wallet .w-main b{font-family:var(--f-display);font-size:28px;color:#FFFFFF;font-variant-numeric:tabular-nums}
+.wallet .w-cost{background:#FBE9E6}
+.wallet .w-cost b{color:#9E2A1F}
+.wallet .w-cost.ok{background:#EAF3EA}.wallet .w-cost.ok b{color:#1F6B3A}
+.g-modal[data-kind=stage] .wallet .w-sub,.g-modal[data-kind=stage] .wallet .w-cost{background:rgba(255,255,255,.12)}
+.g-modal[data-kind=stage] .wallet .w-sub .l{color:#C9D3DF}
+.g-modal[data-kind=stage] .wallet .w-sub b{color:#FFFFFF}
+.fx-card .front .pick small{display:block;font-size:11px;font-weight:700;color:#FFFFFF;opacity:.92;margin:1px 0 0}
 .stage-money{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;color:#E8EDF3;font-size:13px;margin:0 0 12px}
 .stage-money b{color:#FFFFFF}
 .g-modal[data-kind=turn]{max-width:640px;animation:fadeUp .3s both}
@@ -1372,11 +1386,23 @@ async function borrowModal(p, needs = [], title = '') {
   steps.filter(v => v > min && v < room && !opts.some(o => o.value === v)).slice(0, Math.max(2, 6 - opts.length)).forEach(v => opts.push({ label: `${yen(v)}借りる`, note: '', value: v }));
   if (!opts.some(o => o.value === room)) opts.push({ label: `${yen(room)}借りる`, note: '融資枠いっぱい', value: room });
   opts.sort((a, b) => a.value - b.value);
-  const r = await modal(`<div class="kicker">融資（借入）</div><h2>${title || 'いくら借りる？'}</h2><p>手元資金 <b>${yen(p.cash)}</b>／借入残高 <b>${yen(p.debt)}</b>／融資枠 ${yen(loanLimit(p))}（残り <b>${yen(room)}</b>）</p><div class="g-point"><b>借入のルール</b>借りたお金は手元資金に入る。借入残高には自分の番のたびに${rateOf(p)}%の利息がかかり、使わずに持っていても利息は払う。返済は自分の番の最初に選べる。ゴール時の借入残高は企業価値から差し引く。</div>`,
+  const r = await modal(`<div class="kicker">融資（借入）</div><h2>${title || 'いくら借りる？'}</h2>${walletHtml(p)}<div class="g-point"><b>借入のルール</b>借りたお金は手元資金に入る。借入残高には自分の番のたびに${rateOf(p)}%の利息がかかり、使わずに持っていても利息は払う。返済は自分の番の最初に選べる。ゴール時の借入残高は企業価値から差し引く。</div>`,
     [...opts, { label: '借りない', value: 0, sub: true }]);
   if (r > 0) { p.debt += r; p.cash += r; log(`${esc(p.name)}：融資枠から${yen(r)}を借入（借入残高 ${yen(p.debt)}・手元 ${yen(p.cash)}）`, 'good'); }
   return r;
 }
+// 手元資金を大きく見せる帯。cost を渡すと「払ったあとの手元」も出す
+function walletHtml(p, cost = null) {
+  const sub = (l, v) => `<div class="w-sub"><span class="l">${l}</span><b>${v}</b></div>`;
+  let after = '';
+  if (cost != null && cost > 0) {
+    const left = p.cash - cost;
+    after = left >= 0 ? `<div class="w-cost ok"><span class="l">払ったあとの手元</span><b>${yen(left)}</b></div>`
+      : `<div class="w-cost"><span class="l">手元が足りない</span><b>あと${yen(-left)}</b></div>`;
+  }
+  return `<div class="wallet"><div class="w-main"><span class="l">いまの手元資金</span><b>${yen(p.cash)}</b></div>${after}${loanLimit(p) ? sub('融資枠の残り', yen(loanRoom(p))) : sub('融資枠', 'マス6を通るとできる')}${sub('借入残高', yen(p.debt))}</div>`;
+}
+const afterTxt = (p, v) => v > 0 ? (p.cash >= v ? `<small>払ったあと 手元 ${yen(p.cash - v)}</small>` : `<small>借入＋${yen(v - p.cash)} → 手元 0</small>`) : '';
 const borrowTag = (p, v) => v > p.cash && canSpend(p, v) ? `（手元が${yen(v - p.cash)}足りない→借りて払う）` : '';
 // 手元が足りなければ、借りる額を決めてもらう。払えるようになれば true
 async function ensureCash(p, v, what) {
@@ -1674,7 +1700,7 @@ const feeText = (p, s) => {
   return `報酬 ${f ? yen(f) : 'なし'}${r ? `＋ステージごとに顧問料${yen(r)}` : ''}${s === SUP_LEAD ? '（IPO調達額の10%）' : ''}`;
 };
 async function confirmSupporter(p, name, free, title) {
-  const r = await modal(`<div class="kicker">${esc(title)}</div><h2>${esc(name)}</h2><p>${free ? '報酬なしで確保できる。' : feeText(p, name) + '。'}手元：<b>${yen(p.cash)}</b></p><div class="g-point" style="display:block"><b>この専門家について</b>${supNote(name, p)}</div>`,
+  const r = await modal(`<div class="kicker">${esc(title)}</div><h2>${esc(name)}</h2><p>${free ? '報酬なしで確保できる。' : feeText(p, name) + '。'}</p>${free ? '' : walletHtml(p, supFee(p, name))}<div class="g-point" style="display:block"><b>この専門家について</b>${supNote(name, p)}</div>`,
     [...(free || canSpend(p, supFee(p, name)) ? [{ label: free || !supFee(p, name) ? `${name}を確保する${free ? '' : '（報酬なし）'}` : `報酬${yen(supFee(p, name))}を払って${name}を確保する${borrowTag(p, supFee(p, name))}`, value: 'yes' }] : [{ label: 'お金が足りないので確保できない（選び直す）', value: 'back' }]), { label: '選び直す', value: 'back' }, ...(free ? [] : [{ label: 'だれも雇わない', value: 'no' }])]);
   return r;
 }
@@ -1704,12 +1730,12 @@ async function chooseFromAppDeck(p, title, free = false) {
   const open = deck.splice(-Math.min(3, deck.length)).reverse();
   if (!window.FAST) {
     const pickState = n => { const f = free ? 0 : supFee(p, n);
-      if (p.cash >= f) return { ok: true, html: '<span class="pick">この人を選ぶ</span>' };
-      if (canSpend(p, f)) return { ok: true, html: `<p class="ng">手元が${yen(f - p.cash)}足りない（融資枠の残り${yen(loanRoom(p))}）</p><span class="pick">借りてこの人を選ぶ</span>` };
+      if (p.cash >= f) return { ok: true, html: `<span class="pick">この人を選ぶ${afterTxt(p, f)}</span>` };
+      if (canSpend(p, f)) return { ok: true, html: `<p class="ng">手元が${yen(f - p.cash)}足りない（融資枠の残り${yen(loanRoom(p))}）</p><span class="pick">借りてこの人を選ぶ${afterTxt(p, f)}</span>` };
       return { ok: false, html: `<p class="ng">${loanLimit(p) ? '融資枠の残りを合わせても' : '手元資金が'}足りない（報酬${yen(f)}）</p>` }; };
     const front = n => { const sym = catOfSup(n); const cat = ((RULES.ACC_CATS || []).find(c => c.sym === sym) || {}).name; const d = SUP[n] || {};
       return `<div class="no">${sym ? shield(sym, 18) : ''}<span>${esc(d.kind || '')}${cat ? '・得意分野 ' + esc(cat) : ''}</span></div><h4>${esc(n)}</h4><p class="fee">${free ? '報酬なし' : feeText(p, n)}</p><p>${esc(SUP_INFO[n] || '')}</p>${d.perk ? `<p class="perk">${esc(d.perk)}</p>` : ''}${pickState(n).html}`; };
-    const pick = await modal(`<div class="kicker">交流会・${per}の山</div><h2>${title}</h2><p class="stage-lead">${per}の山から${open.length}枚めくった。${free ? '1人を報酬なしで確保できる。' : '報酬を払って1人確保するか、見送る（残りは山の下に戻す）。'}手元 <b>${yen(p.cash)}</b></p>`,
+    const pick = await modal(`<div class="kicker">交流会・${per}の山</div><h2>${title}</h2><p class="stage-lead">${per}の山から${open.length}枚めくった。${free ? '1人を報酬なしで確保できる。' : '報酬を払って1人確保するか、見送る（残りは山の下に戻す）。'}</p>${free ? '' : walletHtml(p)}`,
       [...open.map((n, i) => ({ html: cardHtml(`サポーター<small>${esc(per)}の山</small>`, front(n), '', catOfSup(n) ? CAT_COL[catOfSup(n)] : '#6A4E9B'), aria: n, value: pickState(n).ok ? i : null, disabled: !pickState(n).ok })), ...(free ? [] : [{ label: 'だれも雇わない', note: 'お金をプロダクトに回す', value: -1, sub: true }])], 'stage');
     if (pick === -1) { deck.unshift(...open); log(`${esc(p.name)}はだれも雇わなかった。`); return; }
     const name = open.splice(pick, 1)[0];
@@ -1866,8 +1892,8 @@ async function invest(p, menu, title, intro) {
       if (bought.includes(idx)) tail = '<p class="done">✓ 投資した</p>';
       else if ((p.bought || []).includes(name0)) tail = '<p class="ng">もう投資した（1回まで）</p>';
       else if (!condOk(p, cond0)) tail = `<p class="ng">${esc(cond0)}がいないと投資できない</p>`;
-      else if (p.cash >= c0) { tail = '<span class="pick">投資する</span>'; val = { idx, c: c0, debt: 0 }; }
-      else if (canSpend(p, c0)) { tail = `<p class="ng">手元が${yen(c0 - p.cash)}足りない</p><span class="pick">借りて投資する</span>`; val = { idx, c: c0, debt: c0 - p.cash, name: name0 }; }
+      else if (p.cash >= c0) { tail = `<span class="pick">投資する${afterTxt(p, c0)}</span>`; val = { idx, c: c0, debt: 0 }; }
+      else if (canSpend(p, c0)) { tail = `<p class="ng">手元が${yen(c0 - p.cash)}足りない</p><span class="pick">借りて投資する${afterTxt(p, c0)}</span>`; val = { idx, c: c0, debt: c0 - p.cash, name: name0 }; }
       else tail = `<p class="ng">${loanLimit(p) ? '融資枠を合わせても' : '手元資金が'}足りない</p>`;
       cards.push({ html: cardHtml(`投資<small>マス${menu}</small>`, head + tail, '', TCOL[type0] || '#00325D'), aria: name0, value: val, disabled: !val, mid: true });
       if (bought.includes(idx)) return;
@@ -1889,7 +1915,7 @@ async function invest(p, menu, title, intro) {
     if (loanRoom(p) > 0) choices.push({ label: `融資枠から借りる（残り${yen(loanRoom(p))}）`, note: '先に借りて手元資金を増やしてから投資する', value: 'borrow', sub: true });
     choices.push({ label: bought.length ? '投資を終える' : '今回は投資しない', value: 'end' });
     const subs = choices.filter(x => x.value === 'borrow' || x.value === 'end').map(x => ({ ...x, sub: true }));
-    const r = !window.FAST ? await modal(`<div class="kicker">投資（マス${menu}・全員共通のメニュー）</div><h2>${title}</h2><p class="stage-lead">${intro}</p><div class="stage-money"><span>手元資金 <b>${yen(p.cash)}</b></span><span>借入残高 <b>${yen(p.debt)}</b></span>${loanLimit(p) ? `<span>融資枠の残り <b>${yen(loanRoom(p))}</b></span>` : ''}<span>プロダクト <b>${yen(baseSum(p))}×（1＋★${starSum(p)}）＝${yen(totalProd(p))}</b></span></div>`,
+    const r = !window.FAST ? await modal(`<div class="kicker">投資（マス${menu}・全員共通のメニュー）</div><h2>${title}</h2><p class="stage-lead">${intro}</p>${walletHtml(p)}<div class="stage-money"><span>プロダクト <b>${yen(baseSum(p))}×（1＋★${starSum(p)}）＝${yen(totalProd(p))}</b></span></div>`,
       [...cards, ...subs], firstLook ? 'stage' : 'stage-still') : await modal(`<div class="kicker">投資（マス${menu}・全員共通のメニュー）</div><h2>${title}</h2><p>${intro}</p><div class="g-money"><span>手元資金</span><b>${yen(p.cash)}</b><span>借入残高</span><b>${yen(p.debt)}</b><span>プロダクト</span><b>${yen(baseSum(p))} ×（1＋★${starSum(p)}）＝ ${yen(totalProd(p))}</b>${loanLimit(p) ? `<span>融資枠の残り</span><b>${yen(loanRoom(p))}（枠 ${yen(loanLimit(p))}）</b>` : ''}</div>${na.join('')}`, choices);
     firstLook = false;
     if (r === 'end') break;
@@ -2033,7 +2059,7 @@ async function resolve(p) {
       (p.fixedSeen = p.fixedSeen || []).push(node);
       if (!takeFromDeck(sq.sup)) { await chooseFromMarket(p, `${sq.sup}の山が尽きた`); break; }
       const okPay = canSpend(p, supFee(p, sq.sup));
-      const r = await modal(`<div class="kicker">サポーター</div><h2>${esc(sq.sup)}を確保する？</h2><p>${feeText(p, sq.sup)}。手元：<b>${yen(p.cash)}</b>${okPay ? '' : '<br><b>手元資金と融資枠の残りを合わせても足りないので確保できない。</b>'}</p>`, [...(okPay ? [{ label: `確保する${borrowTag(p, supFee(p, sq.sup))}`, note: supNote(sq.sup, p), value: true }] : []), { label: '見送る', note: 'お金をプロダクトに回す', value: false }]);
+      const r = await modal(`<div class="kicker">サポーター</div><h2>${esc(sq.sup)}を確保する？</h2><p>${feeText(p, sq.sup)}。${okPay ? '' : '<br><b>手元資金と融資枠の残りを合わせても足りないので確保できない。</b>'}</p>${walletHtml(p, supFee(p, sq.sup))}`, [...(okPay ? [{ label: `確保する${borrowTag(p, supFee(p, sq.sup))}`, note: supNote(sq.sup, p), value: true }] : []), { label: '見送る', note: 'お金をプロダクトに回す', value: false }]);
       if (r) await gainSupporter(p, sq.sup); else { returnSup(sq.sup); log(`${esc(p.name)}は${sq.sup}を見送った。`); }
       break;
     }
@@ -2080,7 +2106,7 @@ async function resolve(p) {
     }
     case 'svco': {
       const fee = SUP.SVCO.fee;
-      const r = await modal(`<div class="kicker">最強カード</div><h2>SVCOを確保する？</h2><p>報酬 ${yen(fee)}。ゴール時の企業価値が×${RULES.SVCO_MULT}。分岐Cでも申請ルートに進める。このマスでしか確保できない。手元：<b>${yen(p.cash)}</b></p>`,
+      const r = await modal(`<div class="kicker">最強カード</div><h2>SVCOを確保する？</h2><p>報酬 ${yen(fee)}。ゴール時の企業価値が×${RULES.SVCO_MULT}。分岐Cでも申請ルートに進める。このマスでしか確保できない。</p>${walletHtml(p, p.sups.includes('SVCO') ? null : fee)}`,
         [...(p.sups.includes('SVCO') ? [] : canSpend(p, fee) ? [{ label: `SVCOを確保する（${yen(fee)}）${borrowTag(p, fee)}`, value: 'svco' }] : [{ label: `SVCOはお金が足りないので確保できない（${yen(fee)}・融資枠の残りを合わせても不足）`, value: 'none' }]), { label: '交流会でサポーターを探す', note: '自分の時期の山から3枚めくって1人選ぶ', value: 'meet' }, { label: '何もしない', value: 'none' }]);
       if (r === 'svco' && !(await ensureCash(p, fee, 'SVCOへの報酬'))) log(`${esc(p.name)}は借入をせず、SVCOを見送った。`);
       else if (r === 'svco') { await pay(p, fee, 'SVCOへの報酬'); p.sups.push('SVCO'); log(`${esc(p.name)}に<b>SVCO</b>がついた！`, 'good'); }
