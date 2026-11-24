@@ -1629,7 +1629,7 @@ async function stageChanged(p, from, to) {
 async function stepForward(p, n) {
   for (let i = 0; i < n; i++) {
     let nx;
-    if (BRANCH_IN[p.pos] && p.route === 'in') nx = BRANCH_IN[p.pos];
+    if (BRANCH_IN[p.pos] && (p.route || (p.routes || {})[p.pos]) === 'in') nx = BRANCH_IN[p.pos];
     else nx = NEXT[p.pos];
     if (!nx) break;
     const from = stageAt(p);
@@ -1640,7 +1640,11 @@ async function stepForward(p, n) {
     if (FUNDING[nx]) { if ((p.funded || []).includes(nx)) log(`${esc(p.name)}：マス${nx}は2回目なので資金調達はなし。`); else { (p.funded = p.funded || []).push(nx); await funding(p, nx); } }
     const passSup = { '6': SUP_FIN, '39': SUP_AUD, '42': SUP_LEAD }[nx];
     if (passSup && !p.sups.includes(passSup)) { p.sups.push(passSup); log(`${esc(p.name)}：マス${nx}を通過して<b>${passSup}</b>がついた。`, 'good'); render(); }
-    if (STOPS.has(nx)) { if (i < n - 1) log(`${esc(p.name)}は<b>マス${nx}</b>で止まった（強制ストップ）。`); break; }
+    if (STOPS.has(nx)) {
+      // STOPマスは1人1回きり。2回目以降は止まらずに通過する
+      if (nx !== 'GOAL' && (p.stopped || []).includes(nx)) { if (i < n - 1) log(`${esc(p.name)}：マス${nx}は2回目なので止まらずに通過。`); continue; }
+      if (i < n - 1) log(`${esc(p.name)}は<b>マス${nx}</b>で止まった（強制ストップ）。`); break;
+    }
   }
 }
 function stepBack(p, n) {
@@ -2026,6 +2030,14 @@ async function resolve(p) {
   const node = p.pos;
   if (node === 'GOAL') return goal(p);
   const sq = SQ[node]; if (!sq) return;
+  if (STOPS.has(node)) {
+    if ((p.stopped || []).includes(node)) {
+      log(`${esc(p.name)}：マス${node}は2回目なので何も起きない（STOPマスは1回きり）。`);
+      await info(`STOPマス（マス${node}）`, `${esc(sq.name)}：2回目`, '<p>STOPマスの効果は1人1回きり。戻ってもう一度止まっても、投資や審査はできない。</p>');
+      return;
+    }
+    (p.stopped = p.stopped || []).push(node);
+  }
   const has = s => p.sups.includes(s);
   if (STORY[node] && sq.t !== 'fund') {
     const [story, point] = STORY[node];
@@ -2155,6 +2167,12 @@ async function goal(p) {
 /* ===================== 手番 ===================== */
 async function decideRoute(p) {
   if (!BRANCH_IN[p.pos]) return;
+  const memo = p.routes = p.routes || {};
+  if (memo[p.pos]) { p.route = memo[p.pos]; return; }   // 分かれ道の判断は1回きり（2回目は前回と同じ道）
+  await decideRoute0(p);
+  memo[p.pos] = p.route;
+}
+async function decideRoute0(p) {
   if (p.pos === '16') {
     const mods = [];
     if (p.sups.includes('メンター・アクセラレーター')) mods.push(['メンター', 2]);
